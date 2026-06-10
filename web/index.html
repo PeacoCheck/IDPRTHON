@@ -319,11 +319,37 @@
   /* форма «Добавить раздел» */
   .form-field{margin-top:14px}
   .form-field label{display:block; font-size:12.5px; font-weight:600; color:var(--text2); margin-bottom:5px}
-  .form-field input, .form-field select{
+  .form-field input, .form-field select, .form-field textarea{
     width:100%; padding:9px 11px; border:1px solid var(--hair); border-radius:9px;
     background:var(--card2); color:var(--text); font:inherit; font-size:13.5px;
   }
-  .form-field input:focus, .form-field select:focus{outline:0; border-color:var(--accent)}
+  .form-field textarea{min-height:92px; resize:vertical}
+  .form-field input:focus, .form-field select:focus, .form-field textarea:focus{outline:0; border-color:var(--accent)}
+
+  .object-grid{display:grid; grid-template-columns:minmax(0,1.1fr) minmax(280px,.9fr); gap:16px}
+  .object-card{background:var(--card); border:1px solid var(--hair); border-radius:12px; box-shadow:var(--shadow); overflow:hidden}
+  .object-card .pad{padding:16px}
+  .object-title{font-size:17px; font-weight:650; line-height:1.25; margin-bottom:5px}
+  .object-address{font-size:13.5px; color:var(--text2); line-height:1.5}
+  .object-actions{display:flex; gap:9px; flex-wrap:wrap; padding:14px 16px; border-top:1px solid var(--hair2); background:var(--card2)}
+  .object-sections{display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:12px; margin-top:16px}
+  .section-tile{border:1px solid var(--hair); background:var(--card); border-radius:12px; box-shadow:var(--shadow); padding:15px; text-align:left}
+  .section-tile:hover{border-color:var(--accent); background:var(--card2)}
+  .section-tile .ic{width:32px; height:32px; border-radius:9px; display:grid; place-items:center; background:var(--accent-soft); color:var(--accent); margin-bottom:10px}
+  .section-tile .ic svg{width:18px; height:18px}
+  .section-tile .ttl{font-weight:650}
+  .section-tile .sub{font-size:12.5px; color:var(--text2); margin-top:3px}
+  .empty-state{background:var(--card); border:1px dashed var(--hair); border-radius:14px; padding:30px; text-align:center}
+  .empty-state h2{font-size:18px; margin-bottom:8px}
+  .empty-state p{color:var(--text2); margin-bottom:16px}
+  .archive-list{display:grid; gap:12px}
+  .archive-item{background:var(--card); border:1px solid var(--hair); border-radius:12px; box-shadow:var(--shadow); padding:15px}
+  .archive-item .name{font-weight:650; margin-bottom:4px}
+  .archive-item .meta{font-size:12.5px; color:var(--text2); line-height:1.45; margin-bottom:12px}
+
+  @media (max-width:980px){
+    .object-grid{grid-template-columns:1fr}
+  }
 
   /* ---------- тост ---------- */
   .toast{
@@ -414,8 +440,8 @@
    ========================================================= */
 let APP = null;                 // ответ /api/app-state (объекты + раздел АОСР)
 let STATE = null;               // состояние раздела АОСР (APP.aosr)
-let ACTIVE_OBJECT_ID = "object_1";
-let ACTIVE_SECTION = localStorage.getItem("id-section") || "acts/aosr";
+let ACTIVE_OBJECT_ID = "";
+let ACTIVE_SECTION = localStorage.getItem("id-section") || "objects/current";
 let AOSR_TAB = "check";         // активная подвкладка внутри АОСР
 let SELECTED = new Set();       // выбранные акты (по номеру)
 let BUSY = false;
@@ -565,6 +591,37 @@ function toast(msg){
   clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("show"), 2400);
 }
 
+async function postJson(url, body){
+  const r = await fetch(url, {
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body:JSON.stringify(body || {})
+  });
+  const data = await r.json();
+  if(!r.ok || data.ok === false){
+    throw new Error(data.error || (data.fatal && data.fatal.msg) || "Операция не выполнена");
+  }
+  return data;
+}
+
+function applyAppState(next){
+  APP = next;
+  STATE = APP.aosr || { ok:false };
+  ACTIVE_OBJECT_ID = APP.activeObjectId || "";
+  SELECTED.clear();
+  renderObjectPicker();
+  renderShell();
+}
+
+function currentObject(){
+  return (APP && APP.currentObject) || null;
+}
+
+function activeObject(){
+  const objs = (APP && APP.objects) || [];
+  return currentObject() || objs.find(o => o.id === ACTIVE_OBJECT_ID) || objs[0] || null;
+}
+
 /* =========================================================
    ЗАГРУЗКА СОСТОЯНИЯ ПРИЛОЖЕНИЯ
    ========================================================= */
@@ -577,6 +634,7 @@ async function loadState(manual){
   }
   STATE = APP.aosr || { ok:false };
   if(APP.activeObjectId) ACTIVE_OBJECT_ID = APP.activeObjectId;
+  if(!ACTIVE_SECTION) ACTIVE_SECTION = APP.activeSection || "objects/current";
   SELECTED.clear();
   renderObjectPicker();
   renderShell();
@@ -588,7 +646,7 @@ async function loadState(manual){
    ========================================================= */
 function renderObjectPicker(){
   const objs = (APP && APP.objects) || [];
-  const active = objs.find(o => o.id === ACTIVE_OBJECT_ID) || objs[0];
+  const active = (APP && APP.currentObject) || objs.find(o => o.id === ACTIVE_OBJECT_ID) || objs[0];
   $("objBtnName").textContent = active ? active.shortName : "Объект не выбран";
   $("objMenu").innerHTML = objs.length
     ? objs.map(o => `
@@ -596,18 +654,23 @@ function renderObjectPicker(){
           <div class="t">${esc(o.shortName)}</div>
           <div class="a">${esc(o.address || "адрес не указан")}</div>
         </div>`).join("")
-    : `<div class="obj-item"><div class="t">Объекты не найдены</div></div>`;
+    : `<div class="obj-item" onclick="gotoSection('objects/add')"><div class="t">Добавить объект</div><div class="a">База объектов пока пустая</div></div>`;
 }
 function toggleObjMenu(ev){
   ev.stopPropagation();
   $("objPicker").classList.toggle("open");
 }
-function selectObject(id){
-  ACTIVE_OBJECT_ID = id;
+async function selectObject(id){
   $("objPicker").classList.remove("open");
-  // сейчас объект один; при нескольких файлах здесь будет перезагрузка данных объекта
-  renderObjectPicker();
-  renderShell();
+  if(id === ACTIVE_OBJECT_ID) return;
+  if(!confirm("Переключить текущий объект? Данные разделов будут загружены из Excel выбранного объекта.")) return;
+  try{
+    const next = await postJson("/api/object/select", { id });
+    applyAppState(next);
+    toast("Текущий объект изменён");
+  }catch(e){
+    toast(e.message || "Не удалось переключить объект");
+  }
 }
 document.addEventListener("click", () => $("objPicker").classList.remove("open"));
 
@@ -688,8 +751,7 @@ function onNavClick(ev, id, hasKids){
 
 /* ---------- хлебные крошки ---------- */
 function renderBreadcrumbs(){
-  const objs = (APP && APP.objects) || [];
-  const obj = objs.find(o => o.id === ACTIVE_OBJECT_ID) || objs[0];
+  const obj = activeObject();
   const path = findPath(getMenu(), ACTIVE_SECTION) || [];
   let html = `<a onclick="gotoSection('objects/current')">Объекты</a>`;
   if(obj){
@@ -715,7 +777,13 @@ function gotoSection(id){
    РОУТЕР РАЗДЕЛОВ
    ========================================================= */
 function renderSection(){
-  if(ACTIVE_SECTION === "acts/aosr"){
+  if(ACTIVE_SECTION === "objects/current"){
+    renderCurrentObjectSection();
+  }else if(ACTIVE_SECTION === "objects/add"){
+    renderAddObjectSection();
+  }else if(ACTIVE_SECTION === "objects/archive"){
+    renderArchiveObjectsSection();
+  }else if(ACTIVE_SECTION === "acts/aosr"){
     renderAosrSection();
   }else{
     renderPlaceholder();
@@ -723,27 +791,136 @@ function renderSection(){
   }
 }
 
+function renderCurrentObjectSection(){
+  $("dock").classList.remove("show");
+  const path = findPath(getMenu(), "objects/current") || [];
+  const obj = currentObject();
+  if(!obj){
+    $("content").innerHTML = sectionHeadHtml(path) + `
+      <div class="empty-state">
+        <h2>Объект не выбран</h2>
+        <p>Добавьте первый объект. Приложение создаст папку объекта и Excel-файл данных автоматически.</p>
+        <button class="btn btn-primary" onclick="gotoSection('objects/add')">Добавить объект</button>
+      </div>`;
+    return;
+  }
+
+  const tiles = [
+    { title:"Журналы", section:"journals/general", icon:"book", sub:"Открыть рабочие журналы объекта" },
+    { title:"Акты", section:"acts/aosr", icon:"fileCheck", sub:"Перейти к реестру АОСР" },
+    { title:"Материалы", section:"materials/registry", icon:"boxes", sub:"Документы по материалам" },
+    { title:"Разрешительная", section:"permits/project", icon:"shield", sub:"Проектная и разрешительная документация" },
+    { title:"Исполнительные схемы", section:"schemes/registry", icon:"schema", sub:"Схемы и их реестр" },
+  ];
+
+  $("content").innerHTML = sectionHeadHtml(path) + `
+    <div class="object-grid">
+      <div class="object-card">
+        <div class="pad">
+          <div class="object-title">${esc(obj.name || "Объект")}</div>
+          <div class="object-address">${esc(obj.address || "Адрес не указан")}</div>
+        </div>
+        <div class="kv">
+          <div class="row"><span class="k">Excel-файл данных</span><span class="v">${esc(obj.dataFile || "—")}</span></div>
+          <div class="row"><span class="k">Папка объекта</span><span class="v">${esc(obj.folder || "—")}</span></div>
+          <div class="row"><span class="k">Статус</span><span class="v">${esc(obj.status || "active")}</span></div>
+          <div class="row"><span class="k">Комментарий</span><span class="v">${esc(obj.comment || "—")}</span></div>
+        </div>
+        <div class="object-actions">
+          <button class="btn btn-secondary" onclick="openCurrentObjectFolder()">Открыть папку объекта</button>
+          <button class="btn btn-secondary" onclick="openCurrentObjectExcel()">Открыть Excel объекта</button>
+          <button class="btn btn-primary" onclick="gotoSection('acts/aosr')">Перейти в АОСР</button>
+          <button class="btn btn-ghost" onclick="archiveCurrentObject()">Архивировать объект</button>
+        </div>
+      </div>
+      <div class="object-card">
+        <div class="pad">
+          <div class="block-title">Разделы объекта</div>
+          <p class="object-address">Папки разделов создаются автоматически при первом открытии.</p>
+        </div>
+      </div>
+    </div>
+    <div class="object-sections">
+      ${tiles.map(t => `
+        <button class="section-tile" onclick="gotoSection('${esc(t.section)}')">
+          <div class="ic">${ICON[t.icon] || ICON.folder}</div>
+          <div class="ttl">${esc(t.title)}</div>
+          <div class="sub">${esc(t.sub)}</div>
+        </button>`).join("")}
+    </div>`;
+}
+
+function renderAddObjectSection(){
+  $("dock").classList.remove("show");
+  const path = findPath(getMenu(), "objects/add") || [];
+  $("content").innerHTML = sectionHeadHtml(path) + `
+    <div class="object-card">
+      <div class="pad">
+        <div class="block-title">Добавить объект</div>
+        <div class="form-field">
+          <label>Наименование объекта</label>
+          <input id="newObjName" autocomplete="off" placeholder="Например: Многоквартирный жилой дом, корпус 2">
+        </div>
+        <div class="form-field">
+          <label>Адрес объекта</label>
+          <input id="newObjAddress" autocomplete="off" placeholder="Адрес строительства">
+        </div>
+        <div class="form-field">
+          <label>Комментарий</label>
+          <textarea id="newObjComment" placeholder="Необязательно"></textarea>
+        </div>
+      </div>
+      <div class="object-actions">
+        <button class="btn btn-primary" onclick="addObjectFromForm()">Добавить объект</button>
+        <button class="btn btn-secondary" onclick="gotoSection('objects/current')">Отмена</button>
+      </div>
+    </div>`;
+}
+
+function renderArchiveObjectsSection(){
+  $("dock").classList.remove("show");
+  const path = findPath(getMenu(), "objects/archive") || [];
+  const list = (APP && APP.archiveObjects) || [];
+  $("content").innerHTML = sectionHeadHtml(path) + (list.length ? `
+    <div class="archive-list">
+      ${list.map(o => `
+        <div class="archive-item">
+          <div class="name">${esc(o.name || o.id)}</div>
+          <div class="meta">
+            ${esc(o.address || "Адрес не указан")}<br>
+            Excel: ${esc(o.dataFile || "—")}
+          </div>
+          <div class="object-actions">
+            <button class="btn btn-primary" onclick="restoreObject('${esc(o.id)}')">Восстановить</button>
+            <button class="btn btn-secondary" onclick="openObjectFolder('${esc(o.id)}')">Открыть папку</button>
+          </div>
+        </div>`).join("")}
+    </div>` : `
+    <div class="empty-state">
+      <h2>Архив пуст</h2>
+      <p>Архивированные объекты будут отображаться здесь.</p>
+    </div>`);
+}
+
 /* ---------- заглушка для нереализованных разделов ---------- */
 function renderPlaceholder(){
   const path = findPath(getMenu(), ACTIVE_SECTION) || [];
   const node = path[path.length - 1] || { title:"Раздел" };
+  const obj = activeObject();
   $("content").innerHTML = sectionHeadHtml(path) + `
     <div class="placeholder">
       <div class="pic">${ICON.page}</div>
       <h2>${esc(node.title)}</h2>
-      <p>Раздел подготовлен. Здесь будет реестр, проверка данных и генерация документа.</p>
+      <p>${obj ? `Раздел относится к текущему объекту «${esc(obj.shortName || obj.name)}».` : "Сначала добавьте или восстановите объект."}</p>
       <div class="acts">
-        <button class="btn btn-secondary" onclick="toast('Шаблоны появятся в этом разделе позже')">Добавить шаблон</button>
-        <button class="btn btn-secondary" onclick="toast('Подключение Excel появится позже')">Подключить Excel</button>
-        <button class="btn btn-primary" onclick="toast('Создание документа появится позже')">Создать документ</button>
+        <button class="btn btn-primary" onclick="openSectionFolder('${esc(ACTIVE_SECTION)}','${esc(node.title)}')">Открыть папку раздела</button>
       </div>
     </div>`;
 }
 
 /* ---------- шапка раздела (общая, спокойная) ---------- */
 function sectionHeadHtml(path){
-  const objs = (APP && APP.objects) || [];
-  const obj = objs.find(o => o.id === ACTIVE_OBJECT_ID) || objs[0] || {};
+  const obj = activeObject() || {};
   const sectionLabel = path.map(n => n.title).join(" / ");
   const dataFile = obj.dataFile || (STATE && STATE.data_file ? STATE.data_file.split(/[\\/]/).pop() : "");
   return `
@@ -1081,16 +1258,98 @@ function addSection(){
 }
 
 /* =========================================================
+   ОБЪЕКТЫ: ДОБАВЛЕНИЕ, АРХИВ И ЛОКАЛЬНЫЕ ПАПКИ
+   ========================================================= */
+async function addObjectFromForm(){
+  const name = $("newObjName").value.trim();
+  const address = $("newObjAddress").value.trim();
+  const comment = $("newObjComment").value.trim();
+  if(!name){ toast("Введите наименование объекта"); return; }
+  if(!confirm("Добавить объект и сделать его текущим?")) return;
+  try{
+    const next = await postJson("/api/object/add", { name, address, comment });
+    ACTIVE_SECTION = "objects/current";
+    localStorage.setItem("id-section", ACTIVE_SECTION);
+    applyAppState(next);
+    toast("Объект добавлен");
+  }catch(e){
+    toast(e.message || "Не удалось добавить объект");
+  }
+}
+
+async function archiveCurrentObject(){
+  const obj = currentObject();
+  if(!obj) return;
+  if(!confirm(`Архивировать объект «${obj.shortName || obj.name}»? Он исчезнет из активного списка.`)) return;
+  try{
+    const next = await postJson("/api/object/archive", { id:obj.id });
+    ACTIVE_SECTION = "objects/current";
+    localStorage.setItem("id-section", ACTIVE_SECTION);
+    applyAppState(next);
+    toast("Объект архивирован");
+  }catch(e){
+    toast(e.message || "Не удалось архивировать объект");
+  }
+}
+
+async function restoreObject(id){
+  if(!confirm("Восстановить объект из архива?")) return;
+  try{
+    const next = await postJson("/api/object/unarchive", { id });
+    applyAppState(next);
+    toast("Объект восстановлен");
+  }catch(e){
+    toast(e.message || "Не удалось восстановить объект");
+  }
+}
+
+async function openObjectFolder(id){
+  const obj = [...((APP && APP.objects) || []), ...((APP && APP.archiveObjects) || [])].find(o => o.id === id);
+  if(!obj) return;
+  if(!confirm(`Открыть локальную папку объекта «${obj.shortName || obj.name}»?`)) return;
+  try{
+    await postJson("/api/open-object-folder", { id });
+  }catch(e){
+    toast(e.message || "Не удалось открыть папку объекта");
+  }
+}
+
+function openCurrentObjectFolder(){
+  const obj = currentObject();
+  if(obj) openObjectFolder(obj.id);
+}
+
+function openCurrentObjectExcel(){
+  const obj = currentObject();
+  if(!obj) return;
+  openTarget(obj.dataFile || "");
+}
+
+async function openSectionFolder(section, title){
+  const obj = currentObject();
+  if(!obj){ toast("Объект не выбран"); return; }
+  if(!confirm(`Открыть локальную папку раздела «${title}» для объекта «${obj.shortName || obj.name}»?`)) return;
+  try{
+    await postJson("/api/open-section", { section });
+  }catch(e){
+    toast(e.message || "Не удалось открыть папку раздела");
+  }
+}
+
+/* =========================================================
    ОБЩИЕ ДЕЙСТВИЯ
    ========================================================= */
 function hideOverlay(){ $("overlay").classList.remove("show"); }
 async function openTarget(path){
+  const obj = currentObject();
+  const label = path ? "локальный файл" : "папку готовых документов АОСР";
+  if(!confirm(`Открыть ${label}${obj ? ` для объекта «${obj.shortName || obj.name}»` : ""}?`)) return;
   try{
     const r = await fetch("/api/open", {
       method:"POST", headers:{ "Content-Type":"application/json" }, body:JSON.stringify({ path })
     });
     const res = await r.json();
-    if(!res.ok) toast(res.error === "файл или папка не существует"
+    if(!res.ok) toast(res.error === "Файл или папка не существует."
       ? "Папка появится после первого формирования" : ("Не удалось открыть: " + (res.error || "")));
   }catch(e){ toast("Сервер не отвечает"); }
 }
