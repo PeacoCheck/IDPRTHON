@@ -17,6 +17,7 @@ import { shell } from "./components/shell.js";
 import { button, emptyState, escapeHtml, modal, skeleton, toastView } from "./components/ui.js";
 import { initRouter, navigate } from "./router.js";
 import { notify, state, subscribe } from "./store.js";
+import { renderEditorModal, renderEditorValidation, renderEditorView } from "./views/editor.js";
 import { renderObjectModal, renderObjectView } from "./views/object.js";
 import { renderNewObjectModal, renderObjectsView } from "./views/objects.js";
 
@@ -49,6 +50,7 @@ function pendingView() {
 function routeView() {
   if (state.route === "objects") return renderObjectsView(state);
   if (state.route === "object") return renderObjectView(state);
+  if (state.route === "editor") return renderEditorView(state);
   return pendingView();
 }
 
@@ -74,6 +76,8 @@ function modalView() {
   if (state.modal === "archive-object") return archiveModal();
   const objectModal = renderObjectModal(state);
   if (objectModal) return objectModal;
+  const editorModal = renderEditorModal(state);
+  if (editorModal) return editorModal;
   return "";
 }
 
@@ -81,11 +85,15 @@ function captureUiPosition() {
   const active = document.activeElement;
   const main = document.getElementById("mainContent");
   if (!active || !root.contains(active)) return { mainScroll: main?.scrollTop || 0 };
-  const selector = active.id
-    ? `#${CSS.escape(active.id)}`
-    : active.name
-      ? `[name="${CSS.escape(active.name)}"]`
-      : null;
+  let selector = null;
+  if (active.id) selector = `#${CSS.escape(active.id)}`;
+  else if (active.name) selector = `[name="${CSS.escape(active.name)}"]`;
+  else if (active.dataset.action) {
+    selector = `[data-action="${CSS.escape(active.dataset.action)}"]`;
+    ["document", "documentId", "editorSection", "fieldKey", "objectTab", "group"].forEach((key) => {
+      if (active.dataset[key]) selector += `[data-${key.replace(/[A-Z]/g, (letter) => `-${letter.toLocaleLowerCase()}`)}="${CSS.escape(active.dataset[key])}"]`;
+    });
+  }
   return {
     selector,
     selectionStart: typeof active.selectionStart === "number" ? active.selectionStart : null,
@@ -106,7 +114,10 @@ function restoreUiPosition(position) {
   }
   if (!position.selector) return;
   const active = root.querySelector(position.selector);
-  if (!active) return;
+  if (!active) {
+    if (state.route === "editor") root.querySelector('[data-action="save-document"]')?.focus({ preventScroll: true });
+    return;
+  }
   active.focus({ preventScroll: true });
   if (position.selectionStart !== null && typeof active.setSelectionRange === "function") {
     active.setSelectionRange(position.selectionStart, position.selectionEnd);
@@ -174,6 +185,153 @@ function setFormBusy(form, busy) {
   else submit.removeAttribute("aria-busy");
 }
 
+function hasEditorValue(value) {
+  if (value === null || value === undefined || value === "") return false;
+  if (Array.isArray(value)) return value.length > 0;
+  if (typeof value === "object") return Object.keys(value).length > 0;
+  return true;
+}
+
+function editorIssueCountText(count) {
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  const word = mod10 === 1 && mod100 !== 11
+    ? "замечание"
+    : [2, 3, 4].includes(mod10) && ![12, 13, 14].includes(mod100)
+      ? "замечания"
+      : "замечаний";
+  return `${count} ${word}`;
+}
+
+function editorAliasValue(key, document, draft) {
+  const aliases = {
+    "act.number": draft.number ?? document.number ?? "",
+    "order.number": draft.number ?? document.number ?? "",
+    "scheme.number": draft.number ?? document.number ?? "",
+    "journal.number": draft.number ?? document.number ?? "",
+    "act.date": draft.document_date ?? document.document_date ?? "",
+    "order.date": draft.document_date ?? document.document_date ?? "",
+    works: draft.work_title ?? document.work_title ?? "",
+    scope: draft.work_title ?? document.work_title ?? "",
+  };
+  return Object.hasOwn(aliases, key) ? aliases[key] : undefined;
+}
+
+function editorFieldValue(field, document, draft, resolved) {
+  const key = String(field?.key || "");
+  const alias = editorAliasValue(key, document, draft);
+  if (alias !== undefined) return alias;
+  if (String(field?.source || "").startsWith("object.")) {
+    return field.value ?? resolved?.values?.[key] ?? document.values_json?.[key];
+  }
+  if (Object.hasOwn(draft.values_json || {}, key)) return draft.values_json[key];
+  if (Object.hasOwn(resolved?.values || {}, key)) return resolved.values[key];
+  return field?.value ?? document.values_json?.[key];
+}
+
+function issueDescriptor(item, tone) {
+  if (typeof item === "string") {
+    return { key: item, label: item, message: tone === "error" ? "Обязательное поле не заполнено" : "Проверьте значение", tone };
+  }
+  if (!item || typeof item !== "object") return null;
+  const key = String(item.key || item.field || item.name || item.marker || "");
+  if (!key) return null;
+  return {
+    key,
+    label: item.label || key,
+    message: item.message || item.detail || (tone === "error" ? "Обязательное поле не заполнено" : "Проверьте значение"),
+    tone,
+  };
+}
+
+function buildEditorIssues(document = state.selectedDocument, draft = state.editorDraft, resolved = state.editorResolved) {
+  if (!document || document.source_kind === "imported") return [];
+  const safeDraft = draft || { values_json: {} };
+  const issues = new Map();
+  const fields = Array.isArray(resolved?.fields) ? resolved.fields : [];
+  fields.forEach((field) => {
+    const key = String(field.key || "");
+    if (field.required && key && !hasEditorValue(editorFieldValue(field, document, safeDraft, resolved))) {
+      issues.set(`error:${key}`, {
+        key,
+        label: field.label || key,
+        message: "Обязательное поле не заполнено",
+        tone: "error",
+      });
+    }
+  });
+  (Array.isArray(document.missing_fields_json) ? document.missing_fields_json : []).forEach((item) => {
+    const issue = issueDescriptor(item, "error");
+    if (issue && !hasEditorValue(safeDraft.values_json?.[issue.key]) && !issues.has(`error:${issue.key}`)) {
+      issues.set(`error:${issue.key}`, issue);
+    }
+  });
+  (Array.isArray(document.warnings_json) ? document.warnings_json : []).forEach((item) => {
+    const issue = issueDescriptor(item, "warning");
+    if (issue && !issues.has(`error:${issue.key}`)) issues.set(`warning:${issue.key}`, issue);
+  });
+  return [...issues.values()];
+}
+
+function newEditorDraft(document) {
+  return {
+    number: document.number || "",
+    work_title: document.work_title || "",
+    document_date: document.document_date || "",
+    values_json: { ...(document.values_json || {}) },
+    _dirty: false,
+  };
+}
+
+async function loadEditorDocument(document) {
+  if (!document) return;
+  state.loading = true;
+  state.error = null;
+  state.selectedDocument = document;
+  state.requestedDocumentId = document.id;
+  state.editorDraft = newEditorDraft(document);
+  state.editorResolved = null;
+  state.editorMarkers = null;
+  state.editorIssues = [];
+  state.editorDirty = false;
+
+  if (document.source_kind !== "imported" && document.template_id) {
+    const objectId = document.object_id || state.workspace?.object?.id;
+    const [resolvedResult, markersResult] = await Promise.allSettled([
+      api.resolveTemplate(document.template_id, objectId),
+      api.templateMarkers(document.template_id),
+    ]);
+    const template = state.templates.find((item) => item.id === document.template_id);
+    state.editorResolved = resolvedResult.status === "fulfilled"
+      ? resolvedResult.value
+      : { fields: template?.fields_json || [], values: {} };
+    state.editorMarkers = markersResult.status === "fulfilled" ? markersResult.value : { markers: [] };
+    if (resolvedResult.status === "rejected") state.error = resolvedResult.reason.message;
+  } else {
+    state.editorResolved = { fields: [], values: {} };
+    state.editorMarkers = { markers: [] };
+  }
+
+  state.editorIssues = buildEditorIssues(document, state.editorDraft, state.editorResolved);
+  state.loading = false;
+}
+
+function syncEditorDraftFromForm(form = document.getElementById("documentForm")) {
+  if (!form || !state.selectedDocument) return state.editorDraft;
+  const missingDraft = !state.editorDraft;
+  const draft = state.editorDraft || newEditorDraft(state.selectedDocument);
+  const formData = new FormData(form);
+  draft.number = String(formData.get("number") || "");
+  draft.document_date = String(formData.get("document_date") || "");
+  draft.work_title = String(formData.get("work_title") || "");
+  draft.values_json = { ...(draft.values_json || {}) };
+  for (const [name, value] of formData.entries()) {
+    if (name.startsWith("field:")) draft.values_json[name.slice(6)] = String(value);
+  }
+  if (missingDraft) state.editorDraft = draft;
+  return draft;
+}
+
 function openDocumentEditor(documentId) {
   const document = state.documents.find((item) => item.id === documentId);
   if (!document) {
@@ -183,6 +341,7 @@ function openDocumentEditor(documentId) {
   state.selectedDocument = document;
   state.requestedDocumentId = document.id;
   navigate("editor", { document });
+  loadEditorDocument(document);
 }
 
 async function openObjectFolder(objectId) {
@@ -207,6 +366,234 @@ async function restoreIntegrityRule(ruleId) {
     state.workspace = { ...state.workspace, integrity };
     await refreshObjects();
     notify("Требование восстановлено");
+  } catch (error) {
+    notify(error.message, "error");
+  } finally {
+    state.busyAction = null;
+  }
+}
+
+function markEditorDirty(target) {
+  if (!state.editorDraft || !target?.name) return;
+  if (target.name.startsWith("field:")) {
+    state.editorDraft.values_json[target.name.slice(6)] = target.value;
+  } else if (["number", "document_date", "work_title"].includes(target.name)) {
+    state.editorDraft[target.name] = target.value;
+  } else {
+    return;
+  }
+  state.editorDraft._dirty = true;
+  const indicator = root.querySelector(".editor-dirty");
+  indicator?.classList.add("is-dirty");
+  const label = indicator?.querySelector("span:last-child");
+  if (label) label.textContent = "Есть несохранённые изменения";
+  const outlineState = root.querySelector(".editor-outline__meta small");
+  if (outlineState) outlineState.textContent = "Сначала сохраните изменения";
+
+  const field = target.closest(".editor-field");
+  if (field && target.value.trim()) {
+    field.classList.remove("is-error");
+    const message = field.querySelector(".editor-field__message");
+    if (message && message.textContent.includes("Обязательное поле")) message.innerHTML = '<span aria-hidden="true">&nbsp;</span>';
+  }
+
+  updateEditorIssuePresentation(buildEditorIssues());
+}
+
+function updateEditorIssuePresentation(issues) {
+  const nextIssues = Array.isArray(issues) ? issues : [];
+  if (Array.isArray(state.editorIssues)) {
+    state.editorIssues.splice(0, state.editorIssues.length, ...nextIssues);
+  }
+
+  root.querySelectorAll("[data-editor-field]").forEach((field) => {
+    const key = field.dataset.editorField;
+    const issue = nextIssues.find((item) => String(item.key) === String(key));
+    const control = field.querySelector("input, textarea, select");
+    const message = field.querySelector(".editor-field__message");
+    const isError = issue?.tone === "error";
+    field.classList.toggle("is-error", isError);
+    if (control) {
+      if (isError) control.setAttribute("aria-invalid", "true");
+      else control.removeAttribute("aria-invalid");
+    }
+    if (message && issue) message.textContent = issue.message || "Проверьте значение";
+  });
+
+  const validation = root.querySelector(".editor-validation");
+  if (validation) validation.outerHTML = renderEditorValidation(state, nextIssues);
+
+  const blocking = nextIssues.filter((issue) => issue.tone === "error").length;
+  const generate = root.querySelector('[data-action="generate-document"]');
+  if (generate && !String(state.busyAction || "").startsWith("generate-document")) {
+    generate.disabled = blocking > 0;
+    if (blocking) generate.title = `Сначала исправьте ${blocking} обязательных полей`;
+    else generate.removeAttribute("title");
+  }
+
+  const meta = root.querySelector(".editor-outline__meta");
+  if (meta) {
+    const count = meta.querySelector("strong");
+    if (count) count.textContent = nextIssues.length ? editorIssueCountText(nextIssues.length) : "Замечаний нет";
+  }
+
+
+  const draft = state.editorDraft || {};
+  const fields = Array.isArray(state.editorResolved?.fields) ? state.editorResolved.fields : [];
+  const mainComplete = [draft.number, draft.document_date, draft.work_title].filter(hasEditorValue).length;
+  const templateComplete = fields.filter((field) => hasEditorValue(editorFieldValue(field, state.selectedDocument || {}, draft, state.editorResolved))).length;
+  const counters = [
+    ["main", `${mainComplete}/3`],
+    ["template", `${templateComplete}/${fields.length}`],
+  ];
+  counters.forEach(([key, value]) => {
+    const outlineCount = root.querySelector(`[data-action="focus-editor-section"][data-editor-section="${key}"] em`);
+    const sectionCount = root.querySelector(`[data-section-key="${key}"] .editor-section__count`);
+    if (outlineCount) outlineCount.textContent = value;
+    if (sectionCount) sectionCount.textContent = value;
+  });
+}
+
+function focusEditorField(key) {
+  if (!key) return;
+  const field = root.querySelector(`[data-field-key="${CSS.escape(String(key))}"]`);
+  if (!field) return;
+  const section = field.closest("[data-section-key]");
+  const sectionKey = section?.dataset.sectionKey;
+  if (section?.querySelector(".editor-section__body[hidden]") && sectionKey) {
+    state.collapsedSections = { ...state.collapsedSections, [sectionKey]: false };
+    requestAnimationFrame(() => focusEditorField(key));
+    return;
+  }
+  field.scrollIntoView({ block: "center", behavior: "smooth" });
+  field.focus({ preventScroll: true });
+}
+
+function focusEditorSection(sectionKey) {
+  if (!sectionKey) return;
+  if (state.collapsedSections?.[sectionKey]) {
+    state.collapsedSections = { ...state.collapsedSections, [sectionKey]: false };
+  }
+  requestAnimationFrame(() => {
+    const section = root.querySelector(`[data-section-key="${CSS.escape(String(sectionKey))}"]`);
+    section?.scrollIntoView({ block: "start", behavior: "smooth" });
+    section?.querySelector("input:not([readonly]), textarea:not([readonly]), select, button")?.focus({ preventScroll: true });
+  });
+}
+
+async function saveEditorDocument({ silent = false } = {}) {
+  const document = state.selectedDocument;
+  if (!document || document.source_kind === "imported" || state.busyAction) return null;
+  const draft = syncEditorDraftFromForm();
+  if (!draft) return null;
+  state.busyAction = `save-document-${document.id}`;
+  try {
+    await api.updateDocument(document.id, {
+      number: draft.number,
+      work_title: draft.work_title,
+      document_date: draft.document_date,
+      values_json: draft.values_json,
+    });
+    await Promise.all([refreshWorkspace(document.object_id), refreshObjects()]);
+    const updated = state.documents.find((item) => item.id === document.id);
+    if (!updated) throw new Error("Сохранённый документ не найден");
+    state.selectedDocument = updated;
+    state.editorDraft = newEditorDraft(updated);
+    state.editorIssues = buildEditorIssues(updated, state.editorDraft, state.editorResolved);
+    state.editorDirty = false;
+    if (!silent) notify("Документ сохранён");
+    return updated;
+  } catch (error) {
+    notify(error.message, "error");
+    return null;
+  } finally {
+    state.busyAction = null;
+  }
+}
+
+async function generateEditorDocument() {
+  const document = state.selectedDocument;
+  if (!document || document.source_kind === "imported" || state.busyAction) return;
+  const draft = syncEditorDraftFromForm();
+  const issues = buildEditorIssues(document, draft, state.editorResolved);
+  const blocking = issues.filter((issue) => issue.tone === "error");
+  if (blocking.length) {
+    state.editorIssues = issues;
+    notify(`Заполните обязательные поля: ${blocking.length}`, "error");
+    requestAnimationFrame(() => focusEditorField(blocking[0].key));
+    return;
+  }
+  if (draft?._dirty) {
+    const saved = await saveEditorDocument({ silent: true });
+    if (!saved) return;
+  }
+  state.busyAction = `generate-document-${document.id}`;
+  try {
+    const result = await api.generate([document.id]);
+    await Promise.all([refreshWorkspace(document.object_id), refreshObjects()]);
+    const updated = state.documents.find((item) => item.id === document.id);
+    if (updated) {
+      state.selectedDocument = updated;
+      state.editorDraft = newEditorDraft(updated);
+      state.editorIssues = buildEditorIssues(updated, state.editorDraft, state.editorResolved);
+    }
+    const made = Array.isArray(result.made) ? result.made.length : 0;
+    notify(made ? "DOCX сформирован" : "Формирование завершено", result.warnings ? "warning" : "success");
+  } catch (error) {
+    if (error.missingFields?.length) {
+      const fields = Array.isArray(state.editorResolved?.fields) ? state.editorResolved.fields : [];
+      state.editorIssues = error.missingFields.map((key) => ({
+        key,
+        label: fields.find((field) => field.key === key)?.label || key,
+        message: "Обязательное поле не заполнено",
+        tone: "error",
+      }));
+      requestAnimationFrame(() => focusEditorField(error.missingFields[0]));
+    }
+    notify(error.message, "error");
+  } finally {
+    state.busyAction = null;
+  }
+}
+
+async function changeDocumentCompletion(select) {
+  const document = state.selectedDocument;
+  if (!document || state.busyAction) return;
+  const previous = document.completion_status || "not_started";
+  select.disabled = true;
+  try {
+    const updated = await api.updateCompletion(document.id, select.value);
+    state.documents = state.documents.map((item) => item.id === updated.id ? { ...item, ...updated } : item);
+    state.selectedDocument = { ...document, ...updated };
+    await refreshObjects();
+    notify("Статус готовности обновлён");
+  } catch (error) {
+    select.value = previous;
+    if (error.missingFields?.length) {
+      state.editorIssues = error.missingFields.map((key) => ({ key, label: key, message: "Обязательное поле не заполнено", tone: "error" }));
+    }
+    notify(error.message, "error");
+    select.disabled = false;
+  }
+}
+
+async function deleteSelectedDocument(documentId) {
+  const document = state.documents.find((item) => item.id === documentId) || state.selectedDocument;
+  if (!document || state.busyAction) return;
+  state.busyAction = `confirm-delete-document-${document.id}`;
+  try {
+    await api.deleteDocument(document.id);
+    await Promise.all([refreshWorkspace(document.object_id), refreshObjects()]);
+    state.selectedDocument = null;
+    state.requestedDocumentId = null;
+    state.editorDraft = null;
+    state.editorResolved = null;
+    state.editorMarkers = null;
+    state.editorIssues = [];
+    state.modal = null;
+    state.modalData = null;
+    navigate("object");
+    notify("Документ удалён");
   } catch (error) {
     notify(error.message, "error");
   } finally {
@@ -335,12 +722,28 @@ root.addEventListener("click", (event) => {
     } else if (action === "download-document") {
       window.open(api.fileUrl(Number(actionTarget.dataset.documentId)), "_blank", "noopener,noreferrer");
     } else if (action === "delete-document") {
-      const document = state.documents.find((item) => item.id === Number(actionTarget.dataset.documentId));
+      const documentId = Number(actionTarget.dataset.documentId || actionTarget.dataset.document);
+      const document = state.documents.find((item) => item.id === documentId) || (state.selectedDocument?.id === documentId ? state.selectedDocument : null);
       if (document) {
         state.selectedDocument = document;
-        state.modalData = { document };
+        state.modalData = { document, documentId: document.id, title: document.title };
         state.modal = "delete-document";
       }
+    } else if (action === "confirm-delete-document") {
+      deleteSelectedDocument(Number(actionTarget.dataset.document));
+    } else if (action === "save-document") {
+      saveEditorDocument();
+    } else if (action === "generate-document") {
+      generateEditorDocument();
+    } else if (action === "toggle-validation-panel") {
+      state.validationPanelOpen = state.validationPanelOpen === false;
+    } else if (action === "toggle-editor-section") {
+      const sectionKey = actionTarget.dataset.editorSection;
+      state.collapsedSections = { ...state.collapsedSections, [sectionKey]: !state.collapsedSections?.[sectionKey] };
+    } else if (action === "focus-editor-section") {
+      focusEditorSection(actionTarget.dataset.editorSection);
+    } else if (action === "focus-editor-field") {
+      focusEditorField(actionTarget.dataset.fieldKey);
     } else if (action === "open-waive-rule") {
       const rule = state.workspace?.integrity?.checks?.find((item) => item.id === Number(actionTarget.dataset.ruleId));
       if (rule) {
@@ -353,6 +756,9 @@ root.addEventListener("click", (event) => {
       loadApplication();
     } else if (action === "retry-object-workspace") {
       refreshWorkspace().catch((error) => notify(error.message, "error"));
+    } else if (action === "retry-editor") {
+      const document = state.documents.find((item) => item.id === (state.requestedDocumentId || state.selectedDocument?.id));
+      if (document) loadEditorDocument(document);
     } else if (action === "go-objects") {
       navigate("objects");
     } else if (action === "close-modal") {
@@ -373,6 +779,7 @@ root.addEventListener("click", (event) => {
 root.addEventListener("input", (event) => {
   if (event.target.matches("#objectSearch")) state.objectQuery = event.target.value;
   if (event.target.matches("#documentSearch")) state.documentQuery = event.target.value;
+  if (event.target.closest("#documentForm")) markEditorDirty(event.target);
   if (event.target.matches('#importDocumentForm input[type="file"]')) {
     const file = event.target.files?.[0];
     const label = event.target.closest(".object-file-field")?.querySelector("strong");
@@ -381,6 +788,10 @@ root.addEventListener("input", (event) => {
 });
 
 root.addEventListener("change", (event) => {
+  if (event.target.matches('[data-action="change-completion"]')) {
+    changeDocumentCompletion(event.target);
+    return;
+  }
   if (event.target.matches("#completionFilter")) {
     state.completionFilter = event.target.value || "all";
   }
@@ -617,25 +1028,39 @@ async function loadApplication() {
   state.presets = presetsResult.status === "fulfilled" ? presetsResult.value : [];
   state.backendOnline = [appResult, objectsResult, templatesResult, presetsResult].some((result) => result.status === "fulfilled");
   state.error = objectsResult.status === "rejected" ? objectsResult.reason.message : null;
-  state.loading = false;
 
-  const currentObjectId = state.app?.activeObjectId;
+  const currentObjectId = state.app?.activeObjectId || state.objects.find((object) => object.is_current)?.id;
+  let editorLoaded = false;
   if (currentObjectId && ["object", "editor"].includes(state.route)) {
     try {
-      const workspace = await api.workspace(currentObjectId);
-      state.workspace = workspace;
-      state.selectedObjectId = currentObjectId;
-      state.documents = workspace.documents || [];
+      await refreshWorkspace(currentObjectId);
+      if (state.route === "editor") {
+        const documentId = state.requestedDocumentId || Number(location.hash.split("/").at(-1));
+        const document = state.documents.find((item) => item.id === documentId);
+        if (!document) throw new Error("Документ не найден в текущем объекте");
+        await loadEditorDocument(document);
+        editorLoaded = true;
+      }
     } catch (error) {
       state.error = error.message;
     }
   }
+  if (!editorLoaded) state.loading = false;
 }
 
 document.addEventListener("keydown", (event) => {
+  if ((event.ctrlKey || event.metaKey) && event.key.toLocaleLowerCase() === "s" && state.route === "editor") {
+    event.preventDefault();
+    saveEditorDocument();
+    return;
+  }
   if (event.key === "Escape" && state.modal) {
     state.modal = null;
     state.modalData = null;
+    return;
+  }
+  if (event.key === "Escape" && state.route === "editor" && state.validationPanelOpen !== false) {
+    state.validationPanelOpen = false;
     return;
   }
   if (event.key === "/" && !state.modal && !event.ctrlKey && !event.metaKey && !event.altKey) {
