@@ -1,29 +1,532 @@
-.foundation__card {
-  display: grid;
-  width: min(440px, 100%);
-  gap: var(--space-4);
-  padding: var(--space-6);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  background: var(--surface);
+.button,
+.icon-button {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  font-weight: var(--fw-medium);
+  white-space: nowrap;
+  transition: var(--transition-hover);
 }
 
-.foundation__card p {
+.button {
+  min-width: 72px;
+  height: 34px;
+  padding: 0 var(--space-3);
+}
+
+.button--sm {
+  min-width: 0;
+  height: 30px;
+  padding: 0 var(--space-2);
+  font-size: var(--fs-caption);
+}
+
+.button__label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+.button--primary {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: #ffffff;
+}
+
+.button--primary:hover {
+  background: var(--primary-hover);
+}
+
+.button--secondary {
+  border-color: var(--border-strong);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.button--secondary:hover,
+.button--ghost:hover {
+  background: var(--surface-hover);
+}
+
+.button--ghost {
+  background: transparent;
   color: var(--text-soft);
 }
 
-.foundation__card button {
-  justify-self: start;
-  min-height: 32px;
-  padding: 0 var(--space-3);
+.button--danger {
+  border-color: var(--status-error);
+  background: var(--status-error);
+  color: #ffffff;
+}
+
+.button--danger:hover {
+  background: var(--status-error-soft);
+  color: var(--status-error);
+}
+
+.button:disabled,
+.icon-button:disabled {
+  border-color: var(--border);
+  background: var(--surface-muted);
+  color: var(--text-disabled);
+  opacity: 1;
+}
+
+.button[aria-busy="true"] .button__label {
+  visibility: hidden;
+}
+
+.button__spinner {
+  position: absolute;
+  display: none;
+  width: 14px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spinner-rotate 700ms linear infinite;
+}
+
+.button[aria-busy="true"] .button__spinner {
+  display: block;
+}
+
+.icon-button {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-color: var(--border);
+  background: var(--surface);
+  color: var(--text-soft);
+}
+
+.icon-button:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.icon-button.is-active {
+  border-color: transparent;
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+.badge {
+  display: inline-flex;
+  max-width: 100%;
+  min-height: 24px;
+  align-items: center;
+  gap: 5px;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--status-empty-soft);
+  color: var(--text-soft);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-medium);
+  line-height: 1.2;
+}
+
+.badge--ready {
+  background: var(--status-ready-soft);
+  color: var(--status-ready);
+}
+
+.badge--warning {
+  background: var(--status-warning-soft);
+  color: var(--status-warning);
+}
+
+.badge--error {
+  background: var(--status-error-soft);
+  color: var(--status-error);
+}
+
+.badge--primary {
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+.field {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.field__label {
+  color: var(--text);
+  font-size: var(--fs-label);
+  font-weight: var(--fw-medium);
+}
+
+.field__helper,
+.field__message {
+  min-height: 17px;
+  color: var(--text-faint);
+  font-size: var(--fs-caption);
+  line-height: 1.35;
+}
+
+.field__message {
+  display: flex;
+  align-items: start;
+  gap: var(--space-1);
+}
+
+.field.is-error .field__message {
+  color: var(--status-error);
+}
+
+.control,
+.select,
+.textarea {
+  width: 100%;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
   background: var(--surface);
   color: var(--text);
+  transition: var(--transition-hover);
+}
+
+.control,
+.select {
+  height: 34px;
+  padding: 0 10px;
+}
+
+.textarea {
+  min-height: 88px;
+  padding: 9px 10px;
+  resize: vertical;
+}
+
+.control:hover,
+.select:hover,
+.textarea:hover {
+  background: var(--surface-muted);
+}
+
+.control::placeholder,
+.textarea::placeholder {
+  color: var(--text-faint);
+}
+
+.control:disabled,
+.select:disabled,
+.textarea:disabled,
+.control[readonly],
+.textarea[readonly] {
+  border-color: var(--border);
+  background: var(--surface-muted);
+  color: var(--text-soft);
+}
+
+.field.is-error .control,
+.field.is-error .select,
+.field.is-error .textarea {
+  border-color: var(--status-error);
+}
+
+.tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-muted);
+}
+
+.tabs__button {
+  height: 30px;
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-soft);
+  font-size: var(--fs-label);
   font-weight: var(--fw-medium);
   transition: var(--transition-hover);
 }
 
-.foundation__card button:hover {
+.tabs__button:hover {
   background: var(--surface-hover);
+  color: var(--text);
+}
+
+.tabs__button.is-active {
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+.modal-layer {
+  position: fixed;
+  z-index: 100;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: var(--space-6);
+  background: rgb(13 19 28 / 48%);
+  animation: modal-layer-in var(--transition-modal);
+}
+
+.modal {
+  display: grid;
+  width: min(520px, calc(100vw - 48px));
+  max-height: min(760px, calc(100vh - 48px));
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
+  animation: modal-in var(--transition-modal);
+}
+
+.modal--sm {
+  width: min(420px, calc(100vw - 48px));
+}
+
+.modal--lg {
+  width: min(760px, calc(100vw - 48px));
+}
+
+.modal__header,
+.modal__footer {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4);
+}
+
+.modal__header {
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+}
+
+.modal__header p {
+  margin-top: var(--space-1);
+  color: var(--text-soft);
+  font-size: var(--fs-caption);
+}
+
+.modal__body {
+  min-height: 0;
+  overflow: auto;
+  padding: var(--space-4);
+}
+
+.modal__footer {
+  justify-content: flex-end;
+  border-top: 1px solid var(--border);
+  background: var(--surface-muted);
+}
+
+#toastHost {
+  position: fixed;
+  z-index: 140;
+  right: var(--space-4);
+  bottom: var(--space-4);
+  display: grid;
+  width: min(420px, calc(100vw - 32px));
+  gap: var(--space-2);
+  pointer-events: none;
+}
+
+.toast {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
+  color: var(--text);
+  pointer-events: auto;
+  animation: modal-in var(--transition-modal);
+}
+
+.toast__icon {
+  color: var(--status-ready);
+}
+
+.toast--warning .toast__icon {
+  color: var(--status-warning);
+}
+
+.toast--error .toast__icon {
+  color: var(--status-error);
+}
+
+.toast__message {
+  min-width: 0;
+}
+
+.toast__action {
+  border: 0;
+  background: transparent;
+  color: var(--primary);
+  font-size: var(--fs-label);
+  font-weight: var(--fw-semibold);
+}
+
+.spinner {
+  display: inline-grid;
+  place-items: center;
+}
+
+.spinner__ring {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--border-strong);
+  border-right-color: var(--primary);
+  border-radius: 50%;
+  animation: spinner-rotate 700ms linear infinite;
+}
+
+.skeleton-list {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.skeleton {
+  border-radius: var(--radius);
+  background: var(--surface-strong);
+  animation: skeleton-pulse 1.2s ease-in-out infinite alternate;
+}
+
+.skeleton--row {
+  height: 44px;
+}
+
+.skeleton--card {
+  height: 132px;
+}
+
+.skeleton--line {
+  width: 72%;
+  height: 12px;
+  border-radius: var(--radius-sm);
+}
+
+.empty-state {
+  display: grid;
+  min-height: 220px;
+  align-content: center;
+  justify-items: center;
+  gap: var(--space-2);
+  padding: var(--space-6);
+  color: var(--text-soft);
+  text-align: center;
+}
+
+.empty-state__icon {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  margin-bottom: var(--space-1);
+  place-items: center;
+  border-radius: var(--radius);
+  background: var(--surface-strong);
+  color: var(--text-faint);
+}
+
+.empty-state h2 {
+  color: var(--text);
+}
+
+.empty-state p {
+  max-width: 480px;
+}
+
+.empty-state .button {
+  margin-top: var(--space-2);
+}
+
+.dropdown {
+  position: absolute;
+  z-index: 60;
+  display: grid;
+  min-width: 200px;
+  padding: var(--space-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
+  animation: menu-in var(--transition-menu);
+}
+
+.dropdown__item {
+  display: flex;
+  min-height: 32px;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  transition: var(--transition-hover);
+}
+
+.dropdown__item:hover,
+.dropdown__item.is-active {
+  background: var(--surface-hover);
+}
+
+[data-tooltip] {
+  position: relative;
+}
+
+[data-tooltip]::after {
+  position: absolute;
+  z-index: 150;
+  top: calc(100% + 6px);
+  left: 50%;
+  padding: 5px 7px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  color: var(--text);
+  content: attr(data-tooltip);
+  font-size: var(--fs-caption);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -2px);
+  transition: opacity var(--transition-menu), transform var(--transition-menu);
+  white-space: nowrap;
+}
+
+[data-tooltip]:hover::after,
+[data-tooltip]:focus-visible::after {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+@keyframes spinner-rotate {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes skeleton-pulse {
+  from { opacity: 0.55; }
+  to { opacity: 1; }
+}
+
+@keyframes modal-layer-in {
+  from { opacity: 0; }
+}
+
+@keyframes modal-in {
+  from { opacity: 0; transform: translateY(4px); }
+}
+
+@keyframes menu-in {
+  from { opacity: 0; transform: translateY(-2px); }
 }
