@@ -10,6 +10,7 @@ const state = new Proxy(
     selectedObjectId: null,
     selectedGroupId: "all",
     completionFilter: "all",
+    documentQuery: "",
     objectTab: "registry",
     documents: [],
     selectedDocument: null,
