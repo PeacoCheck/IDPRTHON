@@ -58,9 +58,9 @@ function renderObjectCard(object, state) {
       </span>
       <span class="object-card__address">${icon("mapPin", 16)}<span>${escapeHtml(object.address || "Адрес не указан")}</span></span>
       <span class="object-card__metrics">
-        <span><strong class="tabular">${numberFormat.format(readyCount)} / ${numberFormat.format(documentsCount)}</strong><small>документов готово</small></span>
+        <span><strong class="tabular">${numberFormat.format(readyCount)} / ${numberFormat.format(documentsCount)}</strong><small>готово документов</small></span>
         <span><strong class="tabular">${numberFormat.format(integrity)}%</strong><small>комплектность</small></span>
-        <span class="${issues ? "has-issues" : ""}"><strong class="tabular">${numberFormat.format(issues)}</strong><small>замечаний</small></span>
+        <span class="${issues ? "has-issues" : ""}"><strong class="tabular">${numberFormat.format(issues)}</strong><small>замечания</small></span>
       </span>
       <span class="object-card__integrity">
         <span><span>Готовность комплекта</span><strong class="tabular">${numberFormat.format(integrity)}%</strong></span>

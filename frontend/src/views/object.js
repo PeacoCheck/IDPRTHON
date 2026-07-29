@@ -3,6 +3,15 @@ import { badge, button, emptyState, escapeHtml, iconButton, modal, skeleton } fr
 
 const numberFormat = new Intl.NumberFormat("ru-RU");
 
+function pluralRu(value, one, few, many) {
+  const absolute = Math.abs(Number(value) || 0) % 100;
+  const last = absolute % 10;
+  if (absolute > 10 && absolute < 20) return many;
+  if (last === 1) return one;
+  if (last > 1 && last < 5) return few;
+  return many;
+}
+
 const completionMeta = {
   not_started: { label: "Не начат", tone: "neutral", iconName: "circle" },
   in_progress: { label: "В работе", tone: "warning", iconName: "clock" },
@@ -82,12 +91,12 @@ function objectStatusBadge(object) {
   if (!object?.status || object.status === "active") {
     return badge({ label: "Активный", tone: "ready", iconName: "checkCircle" });
   }
-  return badge({ label: object.status, tone: "neutral", iconName: "info" });
+  return badge({ label: "Статус не указан", tone: "neutral", iconName: "info" });
 }
 
 function completionBadge(status) {
   const meta = completionMeta[status] || {
-    label: status || "Статус не указан",
+    label: "Статус не указан",
     tone: "neutral",
     iconName: "info",
   };
@@ -96,7 +105,7 @@ function completionBadge(status) {
 
 function integrityBadge(status) {
   const meta = integrityMeta[status] || {
-    label: status || "Не определено",
+    label: "Не определено",
     tone: "neutral",
     iconName: "info",
   };
@@ -249,7 +258,7 @@ function renderDocumentsTable(documents) {
             <strong title="${escapeHtml(document.title || "")}">${escapeHtml(document.title || "Без названия")}</strong>
             <span title="${escapeHtml(document.work_title || "")}">${escapeHtml(document.work_title || "Описание работ не указано")}</span>
           </td>
-          <td class="data-table__type">${escapeHtml(documentTypeLabels[document.doc_type] || document.doc_type || "Не указан")}</td>
+          <td class="data-table__type">${escapeHtml(documentTypeLabels[document.doc_type] || "Документ")}</td>
           <td class="data-table__date tabular">${escapeHtml(document.document_date || "—")}</td>
           <td class="data-table__status">${completionBadge(document.completion_status)}</td>
           <td class="data-table__menu">${renderDocumentActions(document)}</td>
@@ -377,7 +386,7 @@ function renderIntegrity(state, workspace) {
       </div>
       <div class="integrity-summary__issues">
         ${issues ? icon("alertTriangle", 18) : icon("checkCircle", 18)}
-        <span><strong class="tabular">${numberFormat.format(issues)}</strong> ${issues === 1 ? "замечание" : "замечаний"}</span>
+        <span><strong class="tabular">${numberFormat.format(issues)}</strong> ${pluralRu(issues, "замечание", "замечания", "замечаний")}</span>
       </div>
       <div class="integrity-progress" role="progressbar" aria-label="Комплектность структуры" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${score}"><span style="--integrity-progress:${score}%"></span></div>
     </header>
@@ -503,7 +512,7 @@ function renderNewGroupModal(state) {
   </form>`;
   return modal({
     title: "Новая группа",
-    description: "Группы плоские и служат для навигации по реестру.",
+    description: "Группы помогают разделить документы и быстро переходить по реестру.",
     body,
     footer: `${button({ label: "Отмена", action: "close-modal", variant: "secondary", disabled: creating })}${button({ label: "Добавить группу", action: "create-group", iconName: "plus", variant: "primary", type: "submit", disabled: creating, attributes: `form="newGroupForm" aria-busy="${creating}"` })}`,
     labelledBy: "newGroupModalTitle",
@@ -570,7 +579,7 @@ function renderNewDocumentModal(state) {
     <input type="hidden" name="object_id" value="${escapeHtml(state.workspace?.object?.id || "")}">
     <div class="object-form-grid">
       <label class="field object-form-grid__wide"><span class="field__label">Шаблон</span><select class="select" name="template_id">${option("", "Без шаблона", templateId)}${templates.map((template) => option(template.id, `${template.title || "Шаблон без названия"} · версия ${template.version || 1}`, templateId)).join("")}</select><span class="field__helper">Поля объекта подставятся автоматически после создания</span></label>
-      <label class="field"><span class="field__label">Пресет</span><select class="select" name="preset_id">${option("", "Без пресета", presetId)}${presets.map((preset) => option(preset.id, `${preset.title || "Пресет"} · ${documentTypeLabels[preset.doc_type] || preset.doc_type || "документ"}`, presetId)).join("")}</select></label>
+      <label class="field"><span class="field__label">Пресет</span><select class="select" name="preset_id">${option("", "Без пресета", presetId)}${presets.map((preset) => option(preset.id, `${preset.title || "Пресет"} · ${documentTypeLabels[preset.doc_type] || "Документ"}`, presetId)).join("")}</select></label>
       <label class="field"><span class="field__label">Группа</span><select class="select" name="group_id">${groupOptions(state, groupId === "all" ? null : groupId)}</select></label>
       <label class="field"><span class="field__label">Номер</span><input class="control mono" name="number" value="${escapeHtml(draft.number || "")}" placeholder="Создастся автоматически"></label>
       <label class="field"><span class="field__label">Дата</span><input class="control tabular" name="document_date" value="${escapeHtml(draft.document_date || "")}" placeholder="ДД.ММ.ГГГГ" inputmode="numeric"></label>

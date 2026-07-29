@@ -75,9 +75,7 @@ function normalizedQuery(value) {
 function docTypeLabel(value) {
   const type = String(value || "other");
   if (DOC_TYPE_LABELS[type]) return DOC_TYPE_LABELS[type];
-  return type
-    .replaceAll("_", " ")
-    .replace(/(^|\s)\S/g, (letter) => letter.toLocaleUpperCase("ru-RU"));
+  return "Другие документы";
 }
 
 function formatTemplateDate(template) {
@@ -391,7 +389,7 @@ function renderDetailsModal(state) {
     title: "Карточка шаблона",
     description: loading ? "Получаю сведения о форме и маркерах." : "Версия, поля и сопоставления DOCX.",
     body: renderDetailsBody(state),
-    footer: `<div class="template-default-action"><span>Недоступно в текущей версии</span>${button({ label: "Сделать основным", iconName: "check", variant: "secondary", disabled: true })}</div>${button({ label: "Закрыть", action: "close-modal", variant: "secondary" })}`,
+    footer: button({ label: "Закрыть", action: "close-modal", variant: "secondary" }),
     size: "lg",
     labelledBy: "templateDetailsModalTitle",
   });

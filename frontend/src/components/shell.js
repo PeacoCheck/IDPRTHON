@@ -24,7 +24,7 @@ export function shell(state, content, { actions = "" } = {}) {
         <button class="rail__button" type="button" data-action="open-command" aria-label="Глобальный поиск" title="Глобальный поиск">${icon("search")}</button>
       </nav>
       <div class="rail__bottom">
-        <span class="rail__status rail__status--${state.backendOnline === false ? "offline" : "online"}" role="status" aria-label="${state.backendOnline === false ? "Backend недоступен" : "Backend доступен"}" title="${state.backendOnline === false ? "Backend недоступен" : "Backend доступен"}">${icon("server", 17)}<span>${state.backendOnline === false ? "×" : "✓"}</span></span>
+        <span class="rail__status rail__status--${state.backendOnline === false ? "offline" : "online"}" role="status" aria-label="${state.backendOnline === false ? "Хранилище недоступно" : "Хранилище доступно"}" title="${state.backendOnline === false ? "Хранилище недоступно" : "Хранилище доступно"}">${icon("server", 17)}<span>${state.backendOnline === false ? "×" : "✓"}</span></span>
         <button class="rail__button" type="button" data-action="toggle-theme" aria-label="${state.theme === "dark" ? "Включить светлую тему" : "Включить тёмную тему"}" title="${state.theme === "dark" ? "Светлая тема" : "Тёмная тема"}">${icon(state.theme === "dark" ? "sun" : "moon")}</button>
       </div>
     </aside>

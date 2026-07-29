@@ -5,6 +5,7 @@ import "./styles/reset.css";
 import "./styles/typography.css";
 import "./styles/layout.css";
 import "./styles/components.css";
+import "./styles/command.css";
 import "./styles/table.css";
 import "./styles/views/objects.css";
 import "./styles/views/object.css";
@@ -13,6 +14,8 @@ import "./styles/views/templates.css";
 import "./styles/utilities.css";
 
 import { api } from "./api.js";
+import { renderCommandPalette } from "./components/command.js";
+import { icon } from "./components/icons.js";
 import { shell } from "./components/shell.js";
 import { button, emptyState, escapeHtml, modal, skeleton, toastView } from "./components/ui.js";
 import { initRouter, navigate } from "./router.js";
@@ -29,6 +32,13 @@ toastHost.setAttribute("aria-live", "polite");
 document.body.append(toastHost);
 
 let renderQueued = false;
+let activeOverlayKey = "";
+let overlayReturnPosition = null;
+let commandSearchTimer = null;
+let commandSearchSequence = 0;
+let workspaceNavigationSequence = 0;
+
+const commandGroupOrder = ["objects", "documents", "presets", "catalogs"];
 
 function applyTheme() {
   const theme = state.theme === "dark" ? "dark" : "light";
@@ -94,10 +104,12 @@ function captureUiPosition() {
   else if (active.name) selector = `[name="${CSS.escape(active.name)}"]`;
   else if (active.dataset.action) {
     selector = `[data-action="${CSS.escape(active.dataset.action)}"]`;
-    ["document", "documentId", "editorSection", "fieldKey", "objectTab", "group", "templateCategory", "templateId"].forEach((key) => {
+    ["document", "documentId", "editorSection", "fieldKey", "objectTab", "objectId", "group", "ruleId", "filter", "templateCategory", "templateId", "presetId", "commandIndex"].forEach((key) => {
       if (active.dataset[key]) selector += `[data-${key.replace(/[A-Z]/g, (letter) => `-${letter.toLocaleLowerCase()}`)}="${CSS.escape(active.dataset[key])}"]`;
     });
-  }
+  } else if (active.dataset.route) selector = `[data-route="${CSS.escape(active.dataset.route)}"]`;
+  else if (active.dataset.openObject) selector = `[data-open-object="${CSS.escape(active.dataset.openObject)}"]`;
+  else if (active.dataset.document) selector = `[data-document="${CSS.escape(active.dataset.document)}"]`;
   return {
     selector,
     selectionStart: typeof active.selectionStart === "number" ? active.selectionStart : null,
@@ -109,23 +121,21 @@ function captureUiPosition() {
 function restoreUiPosition(position) {
   const main = document.getElementById("mainContent");
   if (main) main.scrollTop = position.mainScroll || 0;
-  if (state.modal) {
-    const target = root.querySelector("[data-modal] [autofocus]")
-      || root.querySelector('[data-modal] input:not([type="hidden"]), [data-modal] select, [data-modal] textarea')
-      || root.querySelector("[data-modal] button");
-    target?.focus();
-    return;
-  }
   if (!position.selector) return;
   const active = root.querySelector(position.selector);
-  if (!active) {
-    if (state.route === "editor") root.querySelector('[data-action="save-document"]')?.focus({ preventScroll: true });
-    return;
-  }
+  if (!active) return;
   active.focus({ preventScroll: true });
   if (position.selectionStart !== null && typeof active.setSelectionRange === "function") {
     active.setSelectionRange(position.selectionStart, position.selectionEnd);
   }
+}
+
+function focusActiveOverlay() {
+  const container = root.querySelector(state.commandOpen ? "[data-command]" : "[data-modal]");
+  const target = container?.querySelector("[autofocus]")
+    || container?.querySelector('input:not([type="hidden"]), select, textarea')
+    || container?.querySelector("button, [href], [tabindex]:not([tabindex='-1'])");
+  target?.focus({ preventScroll: true });
 }
 
 function renderToast() {
@@ -135,10 +145,28 @@ function renderToast() {
 function render() {
   renderQueued = false;
   const position = captureUiPosition();
+  const nextOverlayKey = state.commandOpen ? "command" : state.modal ? `modal:${state.modal}` : "";
+  const openingOverlay = !activeOverlayKey && Boolean(nextOverlayKey);
+  const closingOverlay = Boolean(activeOverlayKey) && !nextOverlayKey;
+  const switchingOverlay = Boolean(activeOverlayKey) && Boolean(nextOverlayKey) && activeOverlayKey !== nextOverlayKey;
+  if (openingOverlay) overlayReturnPosition = position;
   applyTheme();
-  root.innerHTML = shell(state, routeView()) + modalView();
+  root.innerHTML = shell(state, routeView()) + modalView() + renderCommandPalette(state);
   renderToast();
-  requestAnimationFrame(() => restoreUiPosition(position));
+  activeOverlayKey = nextOverlayKey;
+  requestAnimationFrame(() => {
+    if (nextOverlayKey) {
+      if (openingOverlay || switchingOverlay) focusActiveOverlay();
+      else restoreUiPosition(position);
+      return;
+    }
+    if (closingOverlay && overlayReturnPosition) {
+      restoreUiPosition(overlayReturnPosition);
+      overlayReturnPosition = null;
+      return;
+    }
+    restoreUiPosition(position);
+  });
 }
 
 subscribe((key) => {
@@ -195,9 +223,134 @@ async function retryTemplates() {
   }
 }
 
-async function refreshWorkspace(objectId = state.selectedObjectId || state.workspace?.object?.id) {
-  if (!objectId) throw new Error("Объект не выбран");
-  const workspace = await api.workspace(objectId);
+function commandItems() {
+  if (state.commandLoading) return [];
+  const results = state.commandResults && typeof state.commandResults === "object" ? state.commandResults : {};
+  return commandGroupOrder.flatMap((group) => (
+    Array.isArray(results[group]) ? results[group].map((item) => ({ group, item })) : []
+  ));
+}
+
+function openCommandPalette() {
+  if (state.modal || state.commandOpen) return;
+  window.clearTimeout(commandSearchTimer);
+  commandSearchSequence += 1;
+  state.commandQuery = "";
+  state.commandResults = null;
+  state.commandIndex = 0;
+  state.commandLoading = false;
+  state.commandError = null;
+  state.commandOpen = true;
+}
+
+function closeCommandPalette() {
+  if (!state.commandOpen) return;
+  window.clearTimeout(commandSearchTimer);
+  commandSearchSequence += 1;
+  state.commandOpen = false;
+  state.commandLoading = false;
+  state.commandError = null;
+}
+
+function queueCommandSearch(query) {
+  const value = String(query || "");
+  const normalized = value.trim();
+  window.clearTimeout(commandSearchTimer);
+  const sequence = ++commandSearchSequence;
+  state.commandQuery = value;
+  state.commandIndex = 0;
+  state.commandError = null;
+  if (normalized.length < 2) {
+    state.commandResults = null;
+    state.commandLoading = false;
+    return;
+  }
+  state.commandResults = null;
+  state.commandLoading = true;
+  commandSearchTimer = window.setTimeout(async () => {
+    try {
+      const results = await api.search(normalized);
+      if (sequence !== commandSearchSequence || !state.commandOpen) return;
+      state.commandResults = results;
+      state.commandError = null;
+    } catch (error) {
+      if (sequence !== commandSearchSequence || !state.commandOpen) return;
+      state.commandResults = null;
+      state.commandError = error.message;
+    } finally {
+      if (sequence === commandSearchSequence && state.commandOpen) state.commandLoading = false;
+    }
+  }, 140);
+}
+
+function moveCommandSelection(delta) {
+  const items = commandItems();
+  if (!items.length) return;
+  const current = Math.min(items.length - 1, Math.max(0, Number(state.commandIndex) || 0));
+  const next = (current + delta + items.length) % items.length;
+  state.commandIndex = next;
+  requestAnimationFrame(() => document.getElementById(`command-option-${next}`)?.scrollIntoView({ block: "nearest" }));
+}
+
+async function openCommandSelection(index = state.commandIndex) {
+  const selected = commandItems()[Number(index) || 0];
+  if (!selected) return;
+  const { group, item } = selected;
+  if (group === "objects") {
+    if (!confirmEditorNavigation()) return;
+    closeCommandPalette();
+    await openObjectWorkspace(Number(item.id));
+    return;
+  }
+  if (group === "documents") {
+    const objectId = Number(item.object_id || item.objectId);
+    const documentId = Number(item.id);
+    if (state.route === "editor" && state.selectedDocument?.id === documentId) {
+      closeCommandPalette();
+      return;
+    }
+    if (!confirmEditorNavigation()) return;
+    closeCommandPalette();
+    if (!objectId) {
+      notify("У документа не указан объект", "error");
+      return;
+    }
+    const selectionSequence = ++workspaceNavigationSequence;
+    const routeAtSelection = state.route;
+    const hashAtSelection = location.hash;
+    if (!state.objects.some((object) => object.id === objectId)) await refreshObjects();
+    if (selectionSequence !== workspaceNavigationSequence || state.route !== routeAtSelection || location.hash !== hashAtSelection) return;
+    const opened = await openObjectWorkspace(objectId);
+    if (opened && state.workspace?.object?.id === objectId) openDocumentEditor(documentId);
+    return;
+  }
+  if (group === "presets") {
+    if (!confirmEditorNavigation("Есть несохранённые изменения. Новый документ откроется в редакторе, а текущие правки будут потеряны. Продолжить?")) return;
+    closeCommandPalette();
+    if (!["object", "editor"].includes(state.route) || !state.workspace?.object || state.workspace.object.status === "archived") {
+      navigate("objects");
+      notify("Сначала откройте объект для нового документа", "warning");
+      return;
+    }
+    state.modalData = {
+      group_id: state.selectedGroupId === "all" ? null : state.selectedGroupId,
+      preset_id: Number(item.id) || null,
+    };
+    state.modal = "new-document";
+    return;
+  }
+  closeCommandPalette();
+  const label = String(item.title || item.code || "Материал из каталога");
+  const detail = String(item.subtitle || "").trim();
+  notify(detail ? `${label} — ${detail}` : label);
+}
+
+function confirmEditorNavigation(message = "Есть несохранённые изменения. Перейти без сохранения?") {
+  if (state.route !== "editor" || !state.editorDraft?._dirty) return true;
+  return window.confirm(message);
+}
+
+function applyWorkspace(workspace, objectId) {
   state.workspace = workspace;
   state.selectedObjectId = objectId;
   state.documents = workspace.documents || [];
@@ -205,6 +358,12 @@ async function refreshWorkspace(objectId = state.selectedObjectId || state.works
     state.selectedDocument = state.documents.find((document) => document.id === state.selectedDocument.id) || null;
   }
   state.error = null;
+}
+
+async function refreshWorkspace(objectId = state.selectedObjectId || state.workspace?.object?.id) {
+  if (!objectId) throw new Error("Объект не выбран");
+  const workspace = await api.workspace(objectId);
+  applyWorkspace(workspace, objectId);
   return workspace;
 }
 
@@ -271,14 +430,14 @@ function editorFieldValue(field, document, draft, resolved) {
 
 function issueDescriptor(item, tone) {
   if (typeof item === "string") {
-    return { key: item, label: item, message: tone === "error" ? "Обязательное поле не заполнено" : "Проверьте значение", tone };
+    return { key: item, label: "Поле документа", message: tone === "error" ? "Обязательное поле не заполнено" : "Проверьте значение", tone };
   }
   if (!item || typeof item !== "object") return null;
   const key = String(item.key || item.field || item.name || item.marker || "");
   if (!key) return null;
   return {
     key,
-    label: item.label || key,
+    label: item.label || "Поле документа",
     message: item.message || item.detail || (tone === "error" ? "Обязательное поле не заполнено" : "Проверьте значение"),
     tone,
   };
@@ -294,7 +453,7 @@ function buildEditorIssues(document = state.selectedDocument, draft = state.edit
     if (field.required && key && !hasEditorValue(editorFieldValue(field, document, safeDraft, resolved))) {
       issues.set(`error:${key}`, {
         key,
-        label: field.label || key,
+        label: field.label || "Поле документа",
         message: "Обязательное поле не заполнено",
         tone: "error",
       });
@@ -302,7 +461,14 @@ function buildEditorIssues(document = state.selectedDocument, draft = state.edit
   });
   (Array.isArray(document.missing_fields_json) ? document.missing_fields_json : []).forEach((item) => {
     const issue = issueDescriptor(item, "error");
-    if (issue && !hasEditorValue(safeDraft.values_json?.[issue.key]) && !issues.has(`error:${issue.key}`)) {
+    const field = fields.find((candidate) => String(candidate?.key || "") === issue?.key);
+    const alias = issue ? editorAliasValue(issue.key, document, safeDraft) : undefined;
+    const value = field
+      ? editorFieldValue(field, document, safeDraft, resolved)
+      : alias !== undefined
+        ? alias
+        : safeDraft.values_json?.[issue?.key];
+    if (issue && !hasEditorValue(value) && !issues.has(`error:${issue.key}`)) {
       issues.set(`error:${issue.key}`, issue);
     }
   });
@@ -425,8 +591,7 @@ function markEditorDirty(target) {
   state.editorDraft._dirty = true;
   const indicator = root.querySelector(".editor-dirty");
   indicator?.classList.add("is-dirty");
-  const label = indicator?.querySelector("span:last-child");
-  if (label) label.textContent = "Есть несохранённые изменения";
+  if (indicator) indicator.innerHTML = `${icon("clock", 14)}<span>Есть несохранённые изменения</span>`;
   const outlineState = root.querySelector(".editor-outline__meta small");
   if (outlineState) outlineState.textContent = "Сначала сохраните изменения";
 
@@ -452,12 +617,26 @@ function updateEditorIssuePresentation(issues) {
     const control = field.querySelector("input, textarea, select");
     const message = field.querySelector(".editor-field__message");
     const isError = issue?.tone === "error";
+    const isWarning = issue?.tone === "warning";
     field.classList.toggle("is-error", isError);
+    field.classList.toggle("is-warning", isWarning);
     if (control) {
       if (isError) control.setAttribute("aria-invalid", "true");
       else control.removeAttribute("aria-invalid");
     }
-    if (message && issue) message.textContent = issue.message || "Проверьте значение";
+    if (message) {
+      if (issue) {
+        message.innerHTML = `${icon(isWarning ? "alertTriangle" : "alertCircle", 14)}<span>${escapeHtml(issue.message || "Проверьте значение")}</span>`;
+      } else {
+        const templateField = (state.editorResolved?.fields || []).find((item) => String(item?.key || "") === String(key));
+        const source = String(templateField?.source || "");
+        const documentBound = editorAliasValue(String(key), state.selectedDocument || {}, state.editorDraft || {}) !== undefined;
+        if (source.startsWith("object.")) message.innerHTML = `${icon("info", 14)}<span>Из карточки объекта · изменяется в карточке объекта</span>`;
+        else if (documentBound) message.innerHTML = `${icon("info", 14)}<span>Связано с основными реквизитами документа</span>`;
+        else if (templateField?.required) message.innerHTML = "<span>Обязательное поле</span>";
+        else message.innerHTML = '<span aria-hidden="true">&nbsp;</span>';
+      }
+    }
   });
 
   const validation = root.querySelector(".editor-validation");
@@ -600,20 +779,20 @@ async function changeDocumentCompletion(select) {
   const document = state.selectedDocument;
   if (!document || state.busyAction) return;
   const previous = document.completion_status || "not_started";
-  select.disabled = true;
+  state.busyAction = `change-completion-${document.id}`;
   try {
-    const updated = await api.updateCompletion(document.id, select.value);
-    state.documents = state.documents.map((item) => item.id === updated.id ? { ...item, ...updated } : item);
-    state.selectedDocument = { ...document, ...updated };
-    await refreshObjects();
-    notify("Статус готовности обновлён");
+    await api.updateCompletion(document.id, select.value);
+    await Promise.all([refreshWorkspace(document.object_id), refreshObjects()]);
+    notify("Статус документа обновлён");
   } catch (error) {
-    select.value = previous;
     if (error.missingFields?.length) {
       state.editorIssues = error.missingFields.map((key) => ({ key, label: key, message: "Обязательное поле не заполнено", tone: "error" }));
     }
+    const current = root.querySelector('[data-action="change-completion"]');
+    if (current) current.value = previous;
     notify(error.message, "error");
-    select.disabled = false;
+  } finally {
+    state.busyAction = null;
   }
 }
 
@@ -644,17 +823,26 @@ async function deleteSelectedDocument(documentId) {
 async function openObjectWorkspace(objectId) {
   const object = state.objects.find((item) => item.id === objectId);
   if (!object || state.busyAction) return;
+  const navigationSequence = ++workspaceNavigationSequence;
+  const routeAtStart = state.route;
+  const hashAtStart = location.hash;
+  const navigationChanged = () => navigationSequence !== workspaceNavigationSequence || state.route !== routeAtStart || location.hash !== hashAtStart;
   state.busyAction = `open-object-${objectId}`;
   try {
     if (object.status !== "archived" && state.app?.activeObjectId !== objectId) {
       state.app = await api.selectObject(objectId);
+      if (navigationChanged()) return false;
     }
-    const workspace = await refreshWorkspace(objectId);
+    const workspace = await api.workspace(objectId);
+    if (navigationChanged()) return false;
+    applyWorkspace(workspace, objectId);
     state.selectedGroupId = "all";
     state.objectTab = "registry";
     navigate("object");
+    return true;
   } catch (error) {
     notify(error.message, "error");
+    return false;
   } finally {
     state.busyAction = null;
   }
@@ -703,6 +891,7 @@ root.addEventListener("click", (event) => {
   const routeTarget = event.target.closest("[data-route]");
   if (routeTarget) {
     event.preventDefault();
+    if (routeTarget.dataset.route !== state.route && !confirmEditorNavigation()) return;
     navigate(routeTarget.dataset.route);
     return;
   }
@@ -710,7 +899,13 @@ root.addEventListener("click", (event) => {
   const actionTarget = event.target.closest("[data-action]");
   const action = actionTarget?.dataset.action;
   if (action) {
-    if (action === "toggle-theme") {
+    if (action === "open-command") {
+      openCommandPalette();
+    } else if (action === "close-command") {
+      closeCommandPalette();
+    } else if (action === "command-result") {
+      openCommandSelection(Number(actionTarget.dataset.commandIndex));
+    } else if (action === "toggle-theme") {
       state.theme = state.theme === "dark" ? "light" : "dark";
       localStorage.setItem("idv-theme", state.theme);
     } else if (action === "upload-template") {
@@ -836,6 +1031,10 @@ root.addEventListener("click", (event) => {
 });
 
 root.addEventListener("input", (event) => {
+  if (event.target.matches("#commandInput")) {
+    queueCommandSearch(event.target.value);
+    return;
+  }
   if (event.target.matches("#objectSearch")) state.objectQuery = event.target.value;
   if (event.target.matches("#documentSearch")) state.documentQuery = event.target.value;
   if (event.target.matches("#templateSearch")) state.templateQuery = event.target.value;
@@ -1213,12 +1412,91 @@ async function loadApplication() {
   if (!editorLoaded) state.loading = false;
 }
 
+function trapOverlayFocus(event) {
+  if (event.key !== "Tab") return false;
+  const selector = state.commandOpen ? "[data-command-dialog]" : state.modal ? "[data-modal]" : null;
+  if (!selector) return false;
+  const container = root.querySelector(selector);
+  if (!container) return false;
+  const focusable = [...container.querySelectorAll('button:not([disabled]), [href], input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')]
+    .filter((element) => !element.hidden && element.getClientRects().length > 0);
+  if (!focusable.length) return false;
+  const first = focusable[0];
+  const last = focusable.at(-1);
+  if (event.shiftKey && (document.activeElement === first || !container.contains(document.activeElement))) {
+    event.preventDefault();
+    last.focus();
+    return true;
+  }
+  if (!event.shiftKey && (document.activeElement === last || !container.contains(document.activeElement))) {
+    event.preventDefault();
+    first.focus();
+    return true;
+  }
+  return false;
+}
+
+function openQuickCreate() {
+  if (state.route === "objects") {
+    state.modalData = null;
+    state.modal = "new-object";
+    return;
+  }
+  if (["object", "editor"].includes(state.route) && state.workspace?.object?.status !== "archived") {
+    if (!confirmEditorNavigation("Есть несохранённые изменения. Новый документ откроется в редакторе, а текущие правки будут потеряны. Продолжить?")) return;
+    state.modalData = { group_id: state.selectedGroupId === "all" ? null : state.selectedGroupId };
+    state.modal = "new-document";
+    return;
+  }
+  if (state.route === "templates") {
+    state.templateWizard = null;
+    state.modalData = { templateId: "" };
+    state.modal = "upload-template";
+  }
+}
+
 document.addEventListener("keydown", (event) => {
-  if ((event.ctrlKey || event.metaKey) && event.key.toLocaleLowerCase() === "s" && state.route === "editor") {
+  const key = event.key.toLocaleLowerCase();
+  const primaryModifier = event.ctrlKey || event.metaKey;
+
+  if (primaryModifier && key === "k") {
+    event.preventDefault();
+    if (state.commandOpen) closeCommandPalette();
+    else if (!state.modal) openCommandPalette();
+    return;
+  }
+
+  if (trapOverlayFocus(event)) return;
+
+  if (state.commandOpen) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeCommandPalette();
+    } else if (event.target.matches("#commandInput") && event.key === "ArrowDown") {
+      event.preventDefault();
+      moveCommandSelection(1);
+    } else if (event.target.matches("#commandInput") && event.key === "ArrowUp") {
+      event.preventDefault();
+      moveCommandSelection(-1);
+    } else if (event.target.matches("#commandInput") && event.key === "Enter" && commandItems().length) {
+      event.preventDefault();
+      openCommandSelection();
+    }
+    return;
+  }
+
+  if (primaryModifier && key === "s" && state.route === "editor" && !state.modal) {
     event.preventDefault();
     saveEditorDocument();
     return;
   }
+
+  if (primaryModifier && key === "n" && !state.modal) {
+    event.preventDefault();
+    openQuickCreate();
+    return;
+  }
+
   if (event.key === "Escape" && state.modal) {
     state.modal = null;
     state.modalData = null;
@@ -1230,7 +1508,7 @@ document.addEventListener("keydown", (event) => {
   }
   if (event.key === "/" && !state.modal && !event.ctrlKey && !event.metaKey && !event.altKey) {
     const target = event.target;
-    if (!(target instanceof HTMLInputElement) && !(target instanceof HTMLTextAreaElement) && !target.isContentEditable) {
+    if (!(target instanceof HTMLInputElement) && !(target instanceof HTMLTextAreaElement) && !(target instanceof HTMLSelectElement) && !target.isContentEditable) {
       const searchId = { objects: "objectSearch", object: "documentSearch", templates: "templateSearch" }[state.route];
       if (!searchId) return;
       event.preventDefault();

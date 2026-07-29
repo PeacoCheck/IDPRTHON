@@ -1,11 +1,13 @@
 function errorMessage(data, fallback) {
   const detail = data?.detail ?? data?.error;
-  if (typeof detail === "string") return detail;
-  if (typeof detail?.message === "string") return detail.message;
-  if (Array.isArray(detail)) {
-    const messages = detail.map((item) => item?.msg).filter(Boolean);
-    if (messages.length) return messages.join(". ");
-  }
+  const serverMessage = typeof detail === "string"
+    ? detail
+    : typeof detail?.message === "string"
+      ? detail.message
+      : "";
+  const looksTechnical = /[/\\]|\b(?:traceback|exception|stack|sql|sqlite|validation error)\b|[a-z0-9]+_[a-z0-9_]+/i.test(serverMessage);
+  if (serverMessage && serverMessage.length <= 320 && /[а-яё]/i.test(serverMessage) && !looksTechnical) return serverMessage;
+  if (Array.isArray(detail)) return fallback;
   return fallback;
 }
 

@@ -38,6 +38,8 @@ const state = new Proxy(
     commandQuery: "",
     commandResults: null,
     commandIndex: 0,
+    commandLoading: false,
+    commandError: null,
     objectOpen: false,
     editorDirty: false,
     collapsedSections: {},

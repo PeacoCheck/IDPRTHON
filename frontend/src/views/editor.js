@@ -4,7 +4,7 @@ import { badge, button, emptyState, escapeHtml, modal, skeleton } from "../compo
 const completionOptions = [
   ["not_started", "Не начат"],
   ["in_progress", "В работе"],
-  ["needs_revision", "Нужны правки"],
+  ["needs_revision", "Требует правок"],
   ["completed", "Готов"],
 ];
 
@@ -42,6 +42,14 @@ function warningWord(count) {
   return "предупреждений";
 }
 
+function occurrenceWord(count) {
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  if (mod10 === 1 && mod100 !== 11) return "вхождение";
+  if ([2, 3, 4].includes(mod10) && ![12, 13, 14].includes(mod100)) return "вхождения";
+  return "вхождений";
+}
+
 function hasValue(value) {
   if (value === null || value === undefined || value === "") return false;
   if (Array.isArray(value)) return value.length > 0;
@@ -60,13 +68,23 @@ function documentFileName(document) {
   return path.split(/[\\/]/).filter(Boolean).at(-1) || document?.title || "Документ";
 }
 
+function importedTypeLabel(value) {
+  const labels = {
+    imported: "Добавленный файл",
+    pdf: "PDF-документ",
+    docx: "Документ Word",
+    xlsx: "Таблица Excel",
+  };
+  return labels[String(value || "")] || "Документ";
+}
+
 function completionSelect(document, state) {
   const value = completionOptions.some(([status]) => status === document?.completion_status)
     ? document.completion_status
     : "not_started";
   const busy = isBusy(state, "change-completion", document?.id);
   return `<label class="editor-completion">
-    <span>Состояние</span>
+    <span>Статус документа</span>
     <select class="select editor-completion__select editor-completion__select--${escapeHtml(value)}" name="completion_status" data-action="change-completion" data-document="${escapeHtml(document?.id)}" aria-label="Состояние документа" ${busy ? "disabled" : ""}>
       ${completionOptions.map(([status, label]) => `<option value="${status}" ${value === status ? "selected" : ""}>${label}</option>`).join("")}
     </select>
@@ -289,11 +307,11 @@ export function renderEditorValidation(state, issues) {
     <div class="editor-issue-list">
       ${issues.length ? issues.map((issue) => `<button type="button" class="editor-issue editor-issue--${issue.tone === "warning" ? "warning" : "error"}" data-action="focus-editor-field" data-field-key="${escapeHtml(issue.key || "")}">
         <span>${icon(issue.tone === "warning" ? "alertTriangle" : "alertCircle", 16)}</span>
-        <span><strong>${escapeHtml(issue.label || issue.key || "Поле документа")}</strong><small>${escapeHtml(issue.message || "Проверьте значение")}</small></span>
+        <span><strong>${escapeHtml(issue.label || "Поле документа")}</strong><small>${escapeHtml(issue.message || "Проверьте значение")}</small></span>
         ${icon("chevronRight", 16)}
       </button>`).join("") : `<div class="editor-validation__empty">${icon("checkCircle", 24)}<strong>Обязательные поля заполнены</strong><span>Можно сформировать итоговый DOCX.</span></div>`}
     </div>
-    <footer><span>Маркеры DOCX</span><strong class="tabular">${markers.markers} · ${markers.occurrences} вхождений</strong></footer>
+    <footer><span>Маркеры DOCX</span><strong class="tabular">${markers.markers} · ${markers.occurrences} ${occurrenceWord(markers.occurrences)}</strong></footer>
   </aside>`;
 }
 
@@ -332,7 +350,7 @@ function renderImportedEditor(state, document, draft) {
         <dl>
           <div><dt>Номер</dt><dd class="mono">${escapeHtml(document.number || "—")}</dd></div>
           <div><dt>Дата</dt><dd class="tabular">${escapeHtml(document.document_date || "—")}</dd></div>
-          <div><dt>Тип</dt><dd>${escapeHtml(document.doc_type || "Файл")}</dd></div>
+          <div><dt>Тип</dt><dd>${escapeHtml(importedTypeLabel(document.doc_type))}</dd></div>
         </dl>
       </div>
       <div class="imported-file-state__actions">
