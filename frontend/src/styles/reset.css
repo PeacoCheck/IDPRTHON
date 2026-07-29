@@ -1,0 +1,8 @@
+*, *::before, *::after { box-sizing: border-box; }
+html, body, #app { min-height: 100%; }
+body { margin: 0; }
+button, input, textarea, select { font: inherit; }
+button { color: inherit; }
+h1, h2, h3, p, dl, dd { margin: 0; }
+button, a { -webkit-tap-highlight-color: transparent; }
+table { border-collapse: collapse; }

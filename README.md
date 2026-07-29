@@ -1,2 +1,54 @@
-# IDPRTHON
-My first site for practice in build construction
+# ID Vault
+
+Локальное хранилище исполнительной документации для строительных объектов. Приложение объединяет реестр объектов, группы документов, библиотеку шаблонов, автоматическую подстановку реквизитов, контроль комплектности и формирование DOCX.
+
+## Возможности
+
+- карточки объектов и реестры исполнительной документации;
+- готовые шаблоны актов, журналов и сопроводительных документов;
+- связанные поля объекта и ручные поля документа;
+- статусы готовности, правок и завершённости;
+- проверка структуры объекта с обоснованными исключениями;
+- локальное хранение в SQLite без передачи рабочих документов в облако;
+- интерфейс Bento Grid в стиле Clean SaaS.
+
+## Быстрый запуск в Windows
+
+1. Установите Python 3.12+ и Node.js 22+.
+2. Скачайте или клонируйте репозиторий.
+3. Запустите `ЗАПУСК.bat` двойным щелчком.
+4. Откройте `http://127.0.0.1:8765/`, если браузер не открылся автоматически.
+
+Сценарий создаёт локальное Python-окружение, устанавливает зависимости и собирает frontend. Рабочая база, импортированные документы и сформированные файлы находятся в каталоге `vault/`; он исключён из Git.
+
+## Ручной запуск
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+Set-Location frontend
+npm install
+npm run build
+Set-Location ..
+.\.venv\Scripts\python.exe app.py --no-browser
+```
+
+## Проверка
+
+```powershell
+Set-Location frontend
+npm run build
+Set-Location ..
+.\.venv\Scripts\python.exe -m unittest -v backend.tests.test_docx_templates tests.test_backend_api
+.\.venv\Scripts\python.exe -m compileall -q backend tests
+```
+
+## Структура
+
+- `backend/` — FastAPI, SQLAlchemy, SQLite и генерация документов;
+- `frontend/` — интерфейс на Vite и ES-модулях;
+- `resources/templates/` — DOCX-шаблоны и описания маркеров;
+- `tests/` — автоматические проверки backend и UI-чеклист;
+- `vault/` — локальные рабочие данные, не публикуются в репозитории.
+
+Подробное описание сценариев и структуры объектов находится в `README.txt`.

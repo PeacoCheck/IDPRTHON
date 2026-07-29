@@ -1,0 +1,91 @@
+{
+  "title": "Общий журнал работ",
+  "form": "Приказ Минстроя России № 1026/пр от 02.12.2022",
+  "template_file": "resources/templates/general-journal-1026pr.docx",
+  "markers": {
+    "journal_number": {
+      "field": "journal.number",
+      "label": "Номер журнала",
+      "source": "manual",
+      "required": true
+    },
+    "construction_type": {
+      "field": "construction_type",
+      "label": "Вид работ",
+      "source": "object.meta.construction_type",
+      "required": true
+    },
+    "object_name": {
+      "field": "object.name",
+      "label": "Наименование объекта",
+      "source": "object.name",
+      "required": true
+    },
+    "object_address": {
+      "field": "object.address",
+      "label": "Адрес объекта",
+      "source": "object.address",
+      "required": true
+    },
+    "zakaz": {
+      "field": "customer.name",
+      "label": "Заказчик",
+      "source": "object.meta.customer.name",
+      "required": true
+    },
+    "technical_customer": {
+      "field": "technical_customer.name",
+      "label": "Технический заказчик",
+      "source": "object.meta.technical_customer.name",
+      "required": false
+    },
+    "construction_permit": {
+      "field": "construction_permit",
+      "label": "Разрешение на строительство",
+      "source": "object.meta.construction_permit",
+      "required": false
+    },
+    "designer": {
+      "field": "designer.name",
+      "label": "Проектировщик",
+      "source": "object.meta.designer.name",
+      "required": false
+    },
+    "project_expertise": {
+      "field": "project_expertise",
+      "label": "Заключение экспертизы",
+      "source": "object.meta.project_expertise",
+      "required": false
+    },
+    "contractor": {
+      "field": "contractor.name",
+      "label": "Подрядчик",
+      "source": "object.meta.contractor.name",
+      "required": true
+    },
+    "object_summary": {
+      "field": "object_summary",
+      "label": "Краткие характеристики объекта",
+      "source": "object.meta.object_summary",
+      "required": false
+    },
+    "start_date": {
+      "field": "start_date",
+      "label": "Дата начала работ",
+      "source": "object.meta.start_date",
+      "required": false
+    },
+    "end_date": {
+      "field": "end_date",
+      "label": "Дата окончания работ",
+      "source": "object.meta.end_date",
+      "required": false
+    },
+    "page_count": {
+      "field": "page_count",
+      "label": "Количество страниц",
+      "source": "manual",
+      "required": false
+    }
+  }
+}

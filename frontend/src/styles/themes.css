@@ -1,0 +1,28 @@
+[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #171c20;
+  --surface: #20262b;
+  --surface-raised: #252c31;
+  --surface-muted: #262d32;
+  --surface-strong: #30383e;
+  --text: #e5e9ec;
+  --text-soft: #abb5bc;
+  --text-faint: #7f8b93;
+  --border: #343d43;
+  --border-strong: #465159;
+  --primary: #74ab99;
+  --primary-hover: #86b9a8;
+  --primary-soft: #263b35;
+  --success: #79b694;
+  --success-soft: #253a2e;
+  --warning: #dfad5f;
+  --warning-soft: #3e3322;
+  --danger: #df8585;
+  --danger-soft: #412a2a;
+  --focus: #91c3b3;
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 18%);
+  --shadow-md: 0 12px 32px rgb(0 0 0 / 34%);
+}
+[data-theme="dark"] .rail { background: #132a24; }
+[data-theme="dark"] .preview-pane { background: #181d20; }
+[data-theme="dark"] .paper { box-shadow: 0 5px 28px rgb(0 0 0 / 42%); }
