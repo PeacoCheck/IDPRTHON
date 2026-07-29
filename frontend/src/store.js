@@ -5,6 +5,7 @@ const state = new Proxy(
     route: "objects",
     objects: [],
     objectFilter: "active",
+    objectQuery: "",
     workspace: null,
     selectedObjectId: null,
     selectedGroupId: "all",
