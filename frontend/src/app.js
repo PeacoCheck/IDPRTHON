@@ -20,6 +20,7 @@ import { notify, state, subscribe } from "./store.js";
 import { renderEditorModal, renderEditorValidation, renderEditorView } from "./views/editor.js";
 import { renderObjectModal, renderObjectView } from "./views/object.js";
 import { renderNewObjectModal, renderObjectsView } from "./views/objects.js";
+import { renderTemplateModal, renderTemplatesView } from "./views/templates.js";
 
 const root = document.getElementById("app");
 const toastHost = document.createElement("div");
@@ -51,6 +52,7 @@ function routeView() {
   if (state.route === "objects") return renderObjectsView(state);
   if (state.route === "object") return renderObjectView(state);
   if (state.route === "editor") return renderEditorView(state);
+  if (state.route === "templates") return renderTemplatesView(state);
   return pendingView();
 }
 
@@ -78,6 +80,8 @@ function modalView() {
   if (objectModal) return objectModal;
   const editorModal = renderEditorModal(state);
   if (editorModal) return editorModal;
+  const templateModal = renderTemplateModal(state);
+  if (templateModal) return templateModal;
   return "";
 }
 
@@ -90,7 +94,7 @@ function captureUiPosition() {
   else if (active.name) selector = `[name="${CSS.escape(active.name)}"]`;
   else if (active.dataset.action) {
     selector = `[data-action="${CSS.escape(active.dataset.action)}"]`;
-    ["document", "documentId", "editorSection", "fieldKey", "objectTab", "group"].forEach((key) => {
+    ["document", "documentId", "editorSection", "fieldKey", "objectTab", "group", "templateCategory", "templateId"].forEach((key) => {
       if (active.dataset[key]) selector += `[data-${key.replace(/[A-Z]/g, (letter) => `-${letter.toLocaleLowerCase()}`)}="${CSS.escape(active.dataset[key])}"]`;
     });
   }
@@ -153,6 +157,42 @@ async function refreshObjects() {
   const objects = await api.objectSummaries();
   state.objects = objects;
   return objects;
+}
+
+async function refreshTemplates() {
+  const templates = await api.templates();
+  state.templates = templates;
+  state.templateError = null;
+  return templates;
+}
+
+async function openTemplateDetails(templateId) {
+  const template = state.templates.find((item) => item.id === Number(templateId));
+  if (!template) {
+    notify("Шаблон не найден", "error");
+    return;
+  }
+  state.templateDetails = { template, loading: true, error: null, markers: [] };
+  state.modalData = { templateId: template.id };
+  state.modal = "template-details";
+  try {
+    const details = await api.templateMarkers(template.id);
+    state.templateDetails = { ...details, template, loading: false, error: null };
+  } catch (error) {
+    state.templateDetails = { template, loading: false, error: error.message, markers: [] };
+  }
+}
+
+async function retryTemplates() {
+  state.loading = true;
+  state.templateError = null;
+  try {
+    await refreshTemplates();
+  } catch (error) {
+    state.templateError = error.message;
+  } finally {
+    state.loading = false;
+  }
 }
 
 async function refreshWorkspace(objectId = state.selectedObjectId || state.workspace?.object?.id) {
@@ -673,6 +713,25 @@ root.addEventListener("click", (event) => {
     if (action === "toggle-theme") {
       state.theme = state.theme === "dark" ? "light" : "dark";
       localStorage.setItem("idv-theme", state.theme);
+    } else if (action === "upload-template") {
+      state.templateWizard = null;
+      const templateId = Number(actionTarget.dataset.templateId) || "";
+      state.modalData = {
+        templateId,
+      };
+      state.modal = "upload-template";
+    } else if (action === "filter-templates") {
+      state.templateCategory = actionTarget.dataset.templateCategory || "all";
+    } else if (action === "clear-template-filters") {
+      state.templateQuery = "";
+      state.templateCategory = "all";
+      requestAnimationFrame(() => document.getElementById("templateSearch")?.focus());
+    } else if (action === "template-details") {
+      openTemplateDetails(Number(actionTarget.dataset.templateId));
+    } else if (action === "retry-template-details") {
+      openTemplateDetails(Number(actionTarget.dataset.templateId || state.templateDetails?.template?.id));
+    } else if (action === "retry-templates") {
+      retryTemplates();
     } else if (action === "new-object") {
       state.modalData = null;
       state.modal = "new-object";
@@ -779,11 +838,17 @@ root.addEventListener("click", (event) => {
 root.addEventListener("input", (event) => {
   if (event.target.matches("#objectSearch")) state.objectQuery = event.target.value;
   if (event.target.matches("#documentSearch")) state.documentQuery = event.target.value;
+  if (event.target.matches("#templateSearch")) state.templateQuery = event.target.value;
   if (event.target.closest("#documentForm")) markEditorDirty(event.target);
   if (event.target.matches('#importDocumentForm input[type="file"]')) {
     const file = event.target.files?.[0];
     const label = event.target.closest(".object-file-field")?.querySelector("strong");
     if (label) label.textContent = file?.name || "Выберите файл";
+  }
+  if (event.target.matches('#uploadTemplateForm input[type="file"]')) {
+    const file = event.target.files?.[0];
+    const label = event.target.closest(".template-dropzone")?.querySelector(".template-dropzone__filename");
+    if (label) label.textContent = file?.name || "Файл не выбран";
   }
 });
 
@@ -978,6 +1043,103 @@ async function createDocumentFromForm(form) {
   });
 }
 
+async function uploadTemplateFromForm(form) {
+  if (state.busyAction) return;
+  const formData = new FormData(form);
+  const templateId = optionalNumber(formData.get("template_id"));
+  const file = formData.get("file");
+  if (!templateId) {
+    form.elements.template_id?.focus();
+    notify("Выберите форму документа", "error");
+    return;
+  }
+  if (!(file instanceof File) || !file.name) {
+    form.elements.file?.focus();
+    notify("Выберите файл DOCX", "error");
+    return;
+  }
+  if (!file.name.toLocaleLowerCase("ru-RU").endsWith(".docx")) {
+    form.elements.file?.focus();
+    notify("Шаблон должен быть файлом DOCX", "error");
+    return;
+  }
+  if (file.size > 25 * 1024 * 1024) {
+    form.elements.file?.focus();
+    notify("Файл DOCX больше 25 МБ", "error");
+    return;
+  }
+
+  state.busyAction = "upload-template-file";
+  setFormBusy(form, true);
+  try {
+    const result = await api.uploadTemplateFile(templateId, file);
+    const templates = await api.templates();
+    const template = result.template || templates.find((item) => item.id === templateId);
+    state.templateWizard = { ...result, template, error: null };
+    state.templateDetails = { ...result, template, loading: false, error: null };
+    state.templates = templates;
+    state.modalData = null;
+    state.modal = "marker-map";
+    notify("DOCX загружен — проверьте сопоставления");
+  } catch (error) {
+    state.modalData = { templateId, error: error.message };
+    notify(error.message, "error");
+  } finally {
+    state.busyAction = null;
+    if (document.contains(form)) setFormBusy(form, false);
+  }
+}
+
+async function saveMarkerMapFromForm(form) {
+  if (state.busyAction) return;
+  const wizard = state.templateWizard || {};
+  const templateId = Number(wizard.template?.id || wizard.template_id);
+  if (!templateId || !wizard.template_file) {
+    notify("Не удалось определить загруженный шаблон", "error");
+    return;
+  }
+  const markerMap = {};
+  const rawMap = wizard.marker_map?.markers || wizard.marker_map || {};
+  form.querySelectorAll('select[name="mapping"][data-marker-name]').forEach((select) => {
+    const markerName = String(select.dataset.markerName || "").trim();
+    const source = String(select.value || "").trim();
+    if (!markerName) return;
+    const marker = Array.isArray(wizard.markers)
+      ? wizard.markers.find((item) => String(item?.name) === markerName)
+      : null;
+    const original = Object.hasOwn(rawMap, markerName) ? rawMap[markerName] : marker?.mapping;
+    const originalSource = typeof original === "string"
+      ? original
+      : String(original?.field || original?.source || "");
+    markerMap[markerName] = original && typeof original === "object" && source === originalSource
+      ? original
+      : source;
+  });
+
+  state.busyAction = "bind-template";
+  setFormBusy(form, true);
+  try {
+    const result = await api.bindTemplate(templateId, {
+      template_file: wizard.template_file,
+      marker_map: markerMap,
+    });
+    const templates = await api.templates();
+    const template = result.template || templates.find((item) => item.id === templateId);
+    state.templates = templates;
+    state.templateDetails = { ...result, template, loading: false, error: null };
+    state.templateWizard = null;
+    state.modal = null;
+    state.modalData = null;
+    notify("Сопоставления сохранены");
+  } catch (error) {
+    state.templateWizard = { ...wizard, marker_map: markerMap, error: error.message };
+    notify(error.message, "error");
+  } finally {
+    state.busyAction = null;
+    if (document.contains(form)) setFormBusy(form, false);
+  }
+}
+
 root.addEventListener("submit", (event) => {
   const form = event.target;
   const handlers = {
@@ -987,6 +1149,8 @@ root.addEventListener("submit", (event) => {
     importDocumentForm: importDocumentFromForm,
     waiveRuleForm: waiveRuleFromForm,
     newDocumentForm: createDocumentFromForm,
+    uploadTemplateForm: uploadTemplateFromForm,
+    markerMapForm: saveMarkerMapFromForm,
   };
   const handler = handlers[form.id];
   if (!handler) return;
@@ -1025,6 +1189,7 @@ async function loadApplication() {
   state.app = appResult.status === "fulfilled" ? appResult.value : null;
   state.objects = objectsResult.status === "fulfilled" ? objectsResult.value : [];
   state.templates = templatesResult.status === "fulfilled" ? templatesResult.value : [];
+  state.templateError = templatesResult.status === "rejected" ? templatesResult.reason.message : null;
   state.presets = presetsResult.status === "fulfilled" ? presetsResult.value : [];
   state.backendOnline = [appResult, objectsResult, templatesResult, presetsResult].some((result) => result.status === "fulfilled");
   state.error = objectsResult.status === "rejected" ? objectsResult.reason.message : null;
