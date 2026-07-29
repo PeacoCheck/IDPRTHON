@@ -1,15 +1,16 @@
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
-@media (max-width: 720px) {
-  .metrics, .quick-actions, .form-grid, .library-layout, .preset-layout { grid-template-columns: 1fr; }
-  .preset-list { border-right: 0; border-bottom: 1px solid var(--border); }
-  .page-header, .editor-bar { align-items: stretch; flex-direction: column; }
-  .page-actions { justify-content: flex-start; }
-  .report-hero { align-items: flex-start; flex-direction: column; }
-  .report-list > button { grid-template-columns: auto minmax(0,1fr) auto; }
-  .report-list .section-progress { display: none; }
-  .toolbar { align-items: stretch; flex-wrap: wrap; }
-  .search-field { min-width: 100%; }
-  .toast { left: 12px; right: 12px; bottom: 12px; min-width: 0; }
+
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

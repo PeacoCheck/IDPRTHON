@@ -1,0 +1,38 @@
+body {
+  font-family: var(--font);
+  font-size: var(--fs-body);
+  font-weight: var(--fw-regular);
+  line-height: 1.45;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+h1 {
+  font-size: var(--fs-display);
+  font-weight: var(--fw-semibold);
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+
+h2,
+h3 {
+  font-size: var(--fs-heading);
+  font-weight: var(--fw-semibold);
+  line-height: 1.35;
+}
+
+.mono,
+[data-mono] {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.tabular,
+time {
+  font-variant-numeric: tabular-nums;
+}

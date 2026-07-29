@@ -1,31 +1,66 @@
 :root {
-  --bg: #f6f7f9;
+  color-scheme: light;
+
+  --bg: #f4f6fa;
   --surface: #ffffff;
-  --surface-raised: #ffffff;
-  --surface-muted: #f8f9fb;
-  --surface-strong: #eef1f4;
-  --text: #1d232a;
-  --text-soft: #66717d;
-  --text-faint: #9099a3;
-  --border: #e2e6ea;
-  --border-strong: #cdd3d9;
-  --primary: #3474db;
-  --primary-hover: #2863c1;
-  --primary-soft: #eaf2ff;
-  --success: #2f6b4f;
-  --success-soft: #e7f3ec;
-  --warning: #9a6217;
-  --warning-soft: #fff4dc;
-  --danger: #a63e3e;
-  --danger-soft: #fbeaea;
-  --focus: #2b6e5b;
-  --shadow-sm: 0 1px 2px rgb(23 33 40 / 6%);
-  --shadow-md: 0 8px 26px rgb(23 33 40 / 11%);
-  --radius-sm: 5px;
+  --surface-muted: #f8fafc;
+  --surface-strong: #eef2f7;
+  --surface-hover: #eef2f7;
+  --surface-selected: #eaf1ff;
+
+  --text: #172033;
+  --text-soft: #5f6b7a;
+  --text-faint: #8792a2;
+  --text-disabled: #b4bcc7;
+
+  --border: #e2e7ee;
+  --border-strong: #cbd3de;
+
+  --primary: #246bfd;
+  --primary-hover: #1959d8;
+  --primary-soft: #eaf1ff;
+
+  --status-ready: #16805b;
+  --status-ready-soft: #e8f5ef;
+  --status-warning: #a7600d;
+  --status-warning-soft: #fff4df;
+  --status-error: #bd3943;
+  --status-error-soft: #fdebed;
+  --status-empty: #8792a2;
+  --status-empty-soft: #f1f3f6;
+
+  --focus: var(--primary);
+  --shadow-sm: 0 1px 2px rgb(23 32 51 / 6%);
+  --shadow-md: 0 12px 32px rgb(23 32 51 / 12%);
+
+  --radius-sm: 6px;
   --radius: 8px;
   --radius-lg: 12px;
-  --rail-width: 68px;
-  --sidebar-width: 252px;
-  --topbar-height: 58px;
-  --font: "Segoe UI Variable", "Segoe UI", Arial, sans-serif;
+
+  --rail-width: 56px;
+  --sidebar-width: 272px;
+  --topbar-height: 60px;
+
+  --font: "Manrope Variable", sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --fw-regular: 450;
+  --fw-medium: 550;
+  --fw-semibold: 650;
+  --fs-display: 20px;
+  --fs-heading: 15px;
+  --fs-body: 14px;
+  --fs-label: 12.5px;
+  --fs-caption: 12px;
+  --fs-eyebrow: 11px;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  --transition-hover: background 100ms ease, color 100ms ease, border-color 100ms ease;
+  --transition-menu: 140ms ease-out;
+  --transition-modal: 180ms ease-out;
 }
