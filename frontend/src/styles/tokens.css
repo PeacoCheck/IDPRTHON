@@ -11,7 +11,7 @@
 
   --text: #17191c;
   --text-soft: #55585e;
-  --text-faint: #8a8d94;
+  --text-faint: #6c7078;
   --text-disabled: #aaa9a5;
 
   --border: #e3e0d8;
@@ -19,8 +19,9 @@
   --grid-line: rgb(23 25 28 / 5%);
 
   /* Signal marking and ink stamp accents. */
-  --accent: #e8550f;
-  --accent-hover: #cc4a0b;
+  --accent: #d1490a;
+  --accent-hover: #b8400a;
+  --accent-decorative: #e8550f;
   --accent-soft: #fdeee3;
   --stamp: #2547c9;
   --stamp-soft: #e9edfb;
@@ -32,7 +33,7 @@
 
   --status-ready: #1d7a4f;
   --status-ready-soft: #e6f1eb;
-  --status-warning: #b3640a;
+  --status-warning: #96540a;
   --status-warning-soft: #f9eedf;
   --status-error: #c03434;
   --status-error-soft: #f8e7e5;
