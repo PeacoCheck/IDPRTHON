@@ -6,6 +6,7 @@ const routeTitles = {
   object: "Рабочее пространство",
   editor: "Файл документа",
   templates: "Шаблоны",
+  "reports/completeness": "Комплектность",
 };
 
 function railLink(route, label, iconName, activeRoute) {
@@ -23,6 +24,7 @@ export function shell(state, content, { actions = "" } = {}) {
       <nav class="rail__nav">
         ${railLink("objects", "Объекты", "objects", state.route)}
         ${railLink("templates", "Шаблоны", "templates", state.route)}
+        ${railLink("reports/completeness", "Отчёт о комплектности", "chartNoAxesColumn", state.route)}
         <button class="rail__button" type="button" data-action="open-command" aria-label="Глобальный поиск" title="Глобальный поиск">${icon("search")}</button>
       </nav>
       <div class="rail__bottom">
@@ -33,7 +35,7 @@ export function shell(state, content, { actions = "" } = {}) {
     <header class="topbar">
       <div class="topbar__title">
         <span>${title}</span>
-        ${context && state.route !== "objects" ? `<span class="topbar__separator">/</span><span class="topbar__context mono">${escapeHtml(context.code || "")}</span>` : ""}
+        ${context && !["objects", "reports/completeness"].includes(state.route) ? `<span class="topbar__separator">/</span><span class="topbar__context mono">${escapeHtml(context.code || "")}</span>` : ""}
       </div>
       <button class="topbar__search" type="button" data-action="open-command">${icon("search", 16)}<span>Поиск по ID Vault</span><kbd>Ctrl K</kbd></button>
       <div class="topbar__actions">${actions}</div>

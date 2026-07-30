@@ -65,7 +65,7 @@ function renderObjectCard(object, state) {
       </span>
       <span class="object-card__integrity">
         <span><span>Готовность комплекта</span><strong class="tabular">${numberFormat.format(integrity)}%</strong></span>
-        <span class="object-card__progress" role="progressbar" aria-label="Готовность комплекта" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${integrity}"><i style="--object-progress:${integrity}%"></i></span>
+        <progress class="object-card__progress" aria-label="Готовность комплекта" max="100" value="${integrity}">${integrity}%</progress>
       </span>
     </button>
     <footer class="object-card__footer">

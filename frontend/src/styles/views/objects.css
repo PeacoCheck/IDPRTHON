@@ -278,16 +278,25 @@
 
 .object-card__progress {
   display: block;
+  width: 100%;
   height: 4px;
   overflow: hidden;
+  border: 0;
   border-radius: var(--radius-sm);
+  background: var(--surface-strong);
+  appearance: none;
+}
+
+.object-card__progress::-webkit-progress-bar {
   background: var(--surface-strong);
 }
 
-.object-card__progress i {
-  display: block;
-  width: var(--object-progress);
-  height: 100%;
+.object-card__progress::-webkit-progress-value {
+  border-radius: inherit;
+  background: var(--stamp);
+}
+
+.object-card__progress::-moz-progress-bar {
   border-radius: inherit;
   background: var(--stamp);
 }

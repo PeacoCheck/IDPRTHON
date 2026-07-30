@@ -1,4 +1,5 @@
 import { icon } from "../components/icons.js";
+import { renderChartCanvas } from "../components/charts.js";
 import {
   documentFileInfo,
   formatFileDate,
@@ -136,18 +137,26 @@ function integrityNumbers(workspace, documents) {
 
 function renderCompletenessBoard(state, workspace, documents) {
   const values = integrityNumbers(workspace, documents);
+  const objectId = workspace.object?.id || "current";
   return `<section class="completeness-board" aria-label="Комплектность объекта">
-    <div class="completeness-stamp" aria-label="Выполнено ${values.satisfied} из ${values.total} требований">
-      <span>КОМПЛЕКТ</span>
-      <strong class="tabular">${numberFormat.format(values.satisfied)}<i>/</i>${numberFormat.format(values.total)}</strong>
-      <small>${values.score}% собрано</small>
+    <div class="completeness-stamp" role="progressbar" aria-label="Выполнено ${values.satisfied} из ${values.total} требований" aria-valuemin="0" aria-valuemax="${values.total}" aria-valuenow="${values.satisfied}">
+      ${renderChartCanvas({
+        id: `chart-object-completeness-${objectId}`,
+        kind: "object-doughnut",
+        payload: { satisfied: values.satisfied, total: values.total },
+        className: "completeness-stamp__chart",
+      })}
+      <div class="completeness-stamp__label">
+        <span>КОМПЛЕКТ</span>
+        <strong class="tabular">${numberFormat.format(values.satisfied)}<i>/</i>${numberFormat.format(values.total)}</strong>
+        <small>${values.score}% собрано</small>
+      </div>
     </div>
     <div class="completeness-board__body">
       <div class="completeness-board__heading">
         <div><span class="technical-eyebrow">Контроль архива</span><h2>${values.missing ? `Не хватает ${values.missing}` : "Структура собрана"}</h2></div>
         <button type="button" class="text-action" data-action="set-object-tab" data-object-tab="integrity">Открыть проверку ${icon("arrowRight", 15)}</button>
       </div>
-      <div class="completeness-track" role="progressbar" aria-label="Комплектность" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${values.score}"><span style="--progress:${values.score}%"></span></div>
       <div class="completeness-metrics">
         <div><span>${icon("file", 16)}</span><strong class="tabular">${values.present}</strong><small>файлов на месте</small></div>
         <div><span>${icon("checkCircle", 16)}</span><strong class="tabular">${values.ready}</strong><small>помечено готовыми</small></div>
@@ -169,20 +178,51 @@ function renderTabs(state, workspace, documents) {
 function renderGroups(state, workspace, documents) {
   const selected = String(state.selectedGroupId ?? "all");
   const groups = Array.isArray(workspace.groups) ? workspace.groups : [];
-  const renderGroup = (group, id, iconName) => {
-    const subset = groupDocuments(documents, id);
+  const groupStats = groups.map((group) => {
+    const subset = groupDocuments(documents, group.id);
     const present = subset.filter(hasFile).length;
     const total = subset.length;
-    const percent = total ? Math.round((present / total) * 100) : 0;
+    return {
+      group,
+      present,
+      total,
+      percent: total ? Math.round((present / total) * 100) : 0,
+    };
+  });
+  const statsById = new Map(groupStats.map((item) => [String(item.group.id), item]));
+  const renderGroup = (group, id, iconName) => {
+    const item = statsById.get(String(id));
+    const subset = item ? [] : groupDocuments(documents, id);
+    const present = item?.present ?? subset.filter(hasFile).length;
+    const total = item?.total ?? subset.length;
     return `<button class="archive-group${selected === String(id) ? " is-active" : ""}" type="button" data-action="select-group" data-group="${escapeHtml(id)}" aria-current="${selected === String(id) ? "true" : "false"}">
       <span class="archive-group__icon">${icon(iconName, 16)}</span>
-      <span class="archive-group__copy"><strong title="${escapeHtml(group.title)}">${escapeHtml(group.title)}</strong><span class="archive-group__track"><i style="--group-progress:${percent}%"></i></span></span>
+      <span class="archive-group__copy"><strong title="${escapeHtml(group.title)}">${escapeHtml(group.title)}</strong></span>
       <span class="archive-group__count mono">${present}/${total}</span>
     </button>`;
   };
+  const chartRows = groupStats.filter((item) => item.total > 0);
+  const chartHeight = Math.min(230, Math.max(92, 44 + chartRows.length * 24));
+  const groupsChart = chartRows.length
+    ? `<div class="archive-groups__breakdown" style="--group-chart-height:${chartHeight}px">
+        <span class="technical-eyebrow">Заполнение по группам</span>
+        ${renderChartCanvas({
+          id: `chart-object-groups-${workspace.object?.id || "current"}`,
+          kind: "groups-bar",
+          payload: {
+            labels: chartRows.map((item) => item.group.title || "Группа"),
+            values: chartRows.map((item) => item.percent),
+            present: chartRows.map((item) => item.present),
+            totals: chartRows.map((item) => item.total),
+          },
+          className: "archive-groups__chart",
+        })}
+      </div>`
+    : "";
 
   return `<aside class="archive-groups" aria-label="Группы документов">
     <header><div><span class="technical-eyebrow">Структура</span><h2>Группы</h2></div>${iconButton({ label: "Добавить группу", action: "open-new-group", iconName: "plus" })}</header>
+    ${groupsChart}
     <nav class="archive-groups__list" data-auto-animate="groups">
       ${renderGroup({ title: "Все документы" }, "all", "layers")}
       ${groups.map((group) => renderGroup(group, group.id, "folder")).join("")}

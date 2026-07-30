@@ -12,6 +12,7 @@ import "./styles/reset.css";
 import "./styles/typography.css";
 import "./styles/layout.css";
 import "./styles/components.css";
+import "./styles/charts.css";
 import "./styles/file-preview.css";
 import "./styles/command.css";
 import "./styles/table.css";
@@ -19,11 +20,13 @@ import "./styles/views/objects.css";
 import "./styles/views/object.css";
 import "./styles/views/editor.css";
 import "./styles/views/templates.css";
+import "./styles/views/reports.css";
 import "./styles/utilities.css";
 
 import autoAnimate from "@formkit/auto-animate";
 import { Idiomorph } from "idiomorph";
 import { api } from "./api.js";
+import { beforeChartNodeMorphed, destroyChartsWithin, hydrateCharts } from "./components/charts.js";
 import { renderCommandPalette } from "./components/command.js";
 import { documentFileInfo, hydrateFilePreviews } from "./components/file-preview.js";
 import { icon } from "./components/icons.js";
@@ -34,6 +37,7 @@ import { notify, state, subscribe } from "./store.js";
 import { renderEditorModal, renderEditorValidation, renderEditorView } from "./views/editor.js";
 import { renderObjectModal, renderObjectView } from "./views/object.js";
 import { renderNewObjectModal, renderObjectsView } from "./views/objects.js";
+import { renderReportsCompletenessView } from "./views/reports-completeness.js";
 import { renderTemplateModal, renderTemplatesView } from "./views/templates.js";
 
 const root = document.getElementById("app");
@@ -86,6 +90,7 @@ function routeView() {
   if (state.route === "object") return renderObjectView(state);
   if (state.route === "editor") return renderEditorView(state);
   if (state.route === "templates") return renderTemplatesView(state);
+  if (state.route === "reports/completeness") return renderReportsCompletenessView(state);
   return pendingView();
 }
 
@@ -208,6 +213,8 @@ function renderInner() {
     restoreFocus: true,
     callbacks: {
       beforeNodeMorphed(oldNode, newNode) {
+        const chartDecision = beforeChartNodeMorphed(oldNode, newNode);
+        if (typeof chartDecision === "boolean") return chartDecision;
         if (!(oldNode instanceof Element) || !(newNode instanceof Element)) return true;
         if (!oldNode.matches("[data-file-preview]") || !newNode.matches("[data-file-preview]")) return true;
         const isHydrated = oldNode.dataset.previewHydrated === "true";
@@ -215,10 +222,15 @@ function renderInner() {
         const sameDataSource = (oldNode.dataset.previewDataUrl || "") === (newNode.dataset.previewDataUrl || "");
         return !(isHydrated && sameSource && sameDataSource);
       },
+      beforeNodeRemoved(node) {
+        if (node instanceof Element) destroyChartsWithin(node);
+        return true;
+      },
     },
   });
   initAutoAnimate();
   hydrateFilePreviews(root);
+  hydrateCharts(root).catch(() => {});
   renderToast();
   activeOverlayKey = nextOverlayKey;
   renderedRoute = state.route;

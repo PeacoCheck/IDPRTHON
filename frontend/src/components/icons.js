@@ -1,53 +1,102 @@
-const paths = {
-  objects: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
-  templates: '<path d="M7 3h8l4 4v14H7z"/><path d="M15 3v5h5M10 12h6M10 16h6"/>',
-  search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/>',
-  sun: '<circle cx="12" cy="12" r="3.5"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
-  moon: '<path d="M20.5 14.2A8 8 0 0 1 9.8 3.5 8.5 8.5 0 1 0 20.5 14.2Z"/>',
-  plus: '<path d="M12 5v14M5 12h14"/>',
-  close: '<path d="m6 6 12 12M18 6 6 18"/>',
-  chevronDown: '<path d="m7 10 5 5 5-5"/>',
-  chevronRight: '<path d="m10 7 5 5-5 5"/>',
-  chevronLeft: '<path d="m14 7-5 5 5 5"/>',
-  arrowLeft: '<path d="M19 12H5M11 18l-6-6 6-6"/>',
-  arrowRight: '<path d="M5 12h14M13 6l6 6-6 6"/>',
-  check: '<path d="m5 12 4 4 10-10"/>',
-  checkCircle: '<circle cx="12" cy="12" r="9"/><path d="m8 12 2.6 2.6L16.5 9"/>',
-  alertCircle: '<circle cx="12" cy="12" r="9"/><path d="M12 7v6M12 17h.01"/>',
-  alertTriangle: '<path d="M10.3 4.3 2.6 18a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 4.3a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/>',
-  info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7h.01"/>',
-  clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
-  circle: '<circle cx="12" cy="12" r="8"/>',
-  folder: '<path d="M3 7.5h7l2-2h9v13H3z"/>',
-  folderOpen: '<path d="M3 8h7l2-2h8v3M3 8v11h16l2-9H7l-2 9"/>',
-  file: '<path d="M7 3h8l4 4v14H7z"/><path d="M15 3v5h5"/>',
-  fileText: '<path d="M7 3h8l4 4v14H7z"/><path d="M15 3v5h5M10 12h6M10 16h6"/>',
-  upload: '<path d="M12 16V4M7 9l5-5 5 5M4 19v2h16v-2"/>',
-  download: '<path d="M12 4v12M7 11l5 5 5-5M4 20h16"/>',
-  save: '<path d="M5 3h12l3 3v15H4V4z"/><path d="M8 3v6h8V3M8 21v-7h8v7"/>',
-  generate: '<path d="m12 3 1.4 4.1L17.5 8.5l-4.1 1.4L12 14l-1.4-4.1-4.1-1.4 4.1-1.4L12 3Z"/><path d="m18 14 .8 2.2L21 17l-2.2.8L18 20l-.8-2.2L15 17l2.2-.8L18 14Z"/>',
-  archive: '<path d="M4 7h16v14H4zM3 3h18v4H3zM9 12h6"/>',
-  restore: '<path d="M4 8v5h5M5.5 13a7 7 0 1 0 2-7"/>',
-  trash: '<path d="M4 7h16M9 3h6l1 4H8l1-4ZM7 7l1 14h8l1-14M10 11v6M14 11v6"/>',
-  more: '<circle cx="5" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1" fill="currentColor" stroke="none"/>',
-  filter: '<path d="M4 6h16M7 12h10M10 18h4"/>',
-  refresh: '<path d="M20 7v5h-5M4 17v-5h5M6.1 9a7 7 0 0 1 11.3-2L20 12M4 12l2.6 5a7 7 0 0 0 11.3-2"/>',
-  external: '<path d="M14 4h6v6M20 4l-9 9M18 13v7H4V6h7"/>',
-  edit: '<path d="m14 5 5 5M4 20l3.5-.8L19 7.7a2 2 0 0 0-2.7-2.7L4.8 16.5 4 20Z"/>',
-  panelRight: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/>',
-  building: '<path d="M4 21V5h10v16M14 9h6v12M8 9h2M8 13h2M8 17h2M17 13h1M17 17h1M2 21h20"/>',
-  mapPin: '<path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/>',
-  calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/>',
-  layers: '<path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="m3 12 9 5 9-5M3 16l9 5 9-5"/>',
-  users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/>',
-  server: '<rect x="3" y="4" width="18" height="6" rx="2"/><rect x="3" y="14" width="18" height="6" rx="2"/><path d="M7 7h.01M7 17h.01M11 7h6M11 17h6"/>',
-  history: '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/>',
-  copy: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>',
-  eye: '<path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="2.5"/>',
-  stamp: '<path d="M8 13V9a4 4 0 0 1 8 0v4M6 13h12l2 4H4l2-4ZM5 20h14"/>',
+import alertCircleSvg from "lucide-static/icons/circle-alert.svg?raw";
+import alertTriangleSvg from "lucide-static/icons/triangle-alert.svg?raw";
+import archiveSvg from "lucide-static/icons/archive.svg?raw";
+import arrowLeftSvg from "lucide-static/icons/arrow-left.svg?raw";
+import arrowRightSvg from "lucide-static/icons/arrow-right.svg?raw";
+import buildingSvg from "lucide-static/icons/building-2.svg?raw";
+import chartNoAxesColumnSvg from "lucide-static/icons/chart-no-axes-column.svg?raw";
+import checkSvg from "lucide-static/icons/check.svg?raw";
+import checkCircleSvg from "lucide-static/icons/circle-check.svg?raw";
+import chevronDownSvg from "lucide-static/icons/chevron-down.svg?raw";
+import chevronRightSvg from "lucide-static/icons/chevron-right.svg?raw";
+import circleSvg from "lucide-static/icons/circle.svg?raw";
+import clockSvg from "lucide-static/icons/clock.svg?raw";
+import closeSvg from "lucide-static/icons/x.svg?raw";
+import copySvg from "lucide-static/icons/copy.svg?raw";
+import downloadSvg from "lucide-static/icons/download.svg?raw";
+import editSvg from "lucide-static/icons/pencil.svg?raw";
+import externalSvg from "lucide-static/icons/external-link.svg?raw";
+import fileSvg from "lucide-static/icons/file.svg?raw";
+import fileTextSvg from "lucide-static/icons/file-text.svg?raw";
+import folderSvg from "lucide-static/icons/folder.svg?raw";
+import folderOpenSvg from "lucide-static/icons/folder-open.svg?raw";
+import historySvg from "lucide-static/icons/history.svg?raw";
+import infoSvg from "lucide-static/icons/info.svg?raw";
+import layersSvg from "lucide-static/icons/layers-3.svg?raw";
+import moonSvg from "lucide-static/icons/moon.svg?raw";
+import objectsSvg from "lucide-static/icons/layout-grid.svg?raw";
+import mapPinSvg from "lucide-static/icons/map-pin.svg?raw";
+import plusSvg from "lucide-static/icons/plus.svg?raw";
+import refreshSvg from "lucide-static/icons/refresh-cw.svg?raw";
+import restoreSvg from "lucide-static/icons/rotate-ccw.svg?raw";
+import saveSvg from "lucide-static/icons/save.svg?raw";
+import searchSvg from "lucide-static/icons/search.svg?raw";
+import serverSvg from "lucide-static/icons/server.svg?raw";
+import sunSvg from "lucide-static/icons/sun.svg?raw";
+import trashSvg from "lucide-static/icons/trash-2.svg?raw";
+import uploadSvg from "lucide-static/icons/upload.svg?raw";
+
+const icons = {
+  objects: objectsSvg,
+  templates: fileTextSvg,
+  search: searchSvg,
+  sun: sunSvg,
+  moon: moonSvg,
+  plus: plusSvg,
+  close: closeSvg,
+  chevronDown: chevronDownSvg,
+  chevronRight: chevronRightSvg,
+  arrowLeft: arrowLeftSvg,
+  arrowRight: arrowRightSvg,
+  check: checkSvg,
+  checkCircle: checkCircleSvg,
+  alertCircle: alertCircleSvg,
+  alertTriangle: alertTriangleSvg,
+  info: infoSvg,
+  clock: clockSvg,
+  circle: circleSvg,
+  folder: folderSvg,
+  folderOpen: folderOpenSvg,
+  file: fileSvg,
+  fileText: fileTextSvg,
+  upload: uploadSvg,
+  download: downloadSvg,
+  save: saveSvg,
+  archive: archiveSvg,
+  restore: restoreSvg,
+  trash: trashSvg,
+  refresh: refreshSvg,
+  external: externalSvg,
+  edit: editSvg,
+  building: buildingSvg,
+  mapPin: mapPinSvg,
+  layers: layersSvg,
+  server: serverSvg,
+  history: historySvg,
+  copy: copySvg,
+  chartNoAxesColumn: chartNoAxesColumnSvg,
 };
 
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function svgBody(rawSvg) {
+  return rawSvg.match(/<svg\b[^>]*>([\s\S]*?)<\/svg>/i)?.[1]?.trim() || "";
+}
+
 export function icon(name, size = 18, label = "") {
-  const title = label ? `<title>${label}</title>` : "";
-  return `<svg class="icon" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" ${label ? 'role="img"' : 'aria-hidden="true"'}>${title}${paths[name] || paths.circle}</svg>`;
+  const numericSize = Number(size);
+  const normalizedSize = Number.isFinite(numericSize) && numericSize > 0 ? numericSize : 18;
+  const accessibleLabel = String(label || "").trim();
+  const title = accessibleLabel ? `<title>${escapeHtml(accessibleLabel)}</title>` : "";
+  const accessibility = accessibleLabel
+    ? `role="img" aria-label="${escapeHtml(accessibleLabel)}"`
+    : 'aria-hidden="true" focusable="false"';
+  return `<svg class="icon" width="${normalizedSize}" height="${normalizedSize}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ${accessibility}>${title}${svgBody(icons[name] || circleSvg)}</svg>`;
 }

@@ -1,6 +1,6 @@
 import { state } from "./store.js";
 
-const known = new Set(["objects", "object", "editor", "templates"]);
+const known = new Set(["objects", "object", "editor", "templates", "reports/completeness"]);
 
 export function navigate(route, options = {}) {
   const clean = known.has(route) ? route : "objects";
@@ -16,7 +16,11 @@ export function navigate(route, options = {}) {
 
 export function initRouter() {
   const sync = () => {
-    const [route = "objects", rawDocumentId] = (location.hash.replace("#/", "") || "objects").split("/");
+    const parts = (location.hash.replace("#/", "") || "objects").split("/");
+    const route = parts[0] === "reports" && parts[1] === "completeness"
+      ? "reports/completeness"
+      : parts[0] || "objects";
+    const rawDocumentId = route === "editor" ? parts[1] : null;
     const clean = known.has(route) ? route : "objects";
     state.route = clean;
     if (clean === "editor") {
