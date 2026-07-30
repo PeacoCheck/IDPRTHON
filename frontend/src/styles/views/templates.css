@@ -191,6 +191,14 @@
   transform: rotate(-2deg);
 }
 
+.template-file-stamp.is-empty {
+  border-style: dashed;
+  border-color: var(--status-warning);
+  color: var(--status-warning);
+  line-height: 1.15;
+  text-align: center;
+}
+
 .archive-template-card__file {
   gap: var(--space-2);
   padding: 8px;
@@ -253,6 +261,14 @@
 
 .archive-template-card__footer > div {
   gap: 4px;
+}
+
+.template-add-disabled {
+  display: inline-flex;
+}
+
+.template-add-disabled .button {
+  pointer-events: none;
 }
 
 .template-preview-modal {

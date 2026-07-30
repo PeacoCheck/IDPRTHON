@@ -154,7 +154,14 @@ function restoreUiPosition(position) {
 }
 
 function focusActiveOverlay() {
-  const container = root.querySelector(state.commandOpen ? "[data-command]" : "[data-modal]");
+  const selector = state.commandOpen
+    ? "[data-command]"
+    : state.modal
+      ? "[data-modal]"
+      : state.previewDocumentId
+        ? "[data-preview-drawer]"
+        : null;
+  const container = selector ? root.querySelector(selector) : null;
   const target = container?.querySelector("[autofocus]")
     || container?.querySelector('input:not([type="hidden"]), select, textarea')
     || container?.querySelector("button, [href], [tabindex]:not([tabindex='-1'])");
@@ -182,7 +189,13 @@ function initAutoAnimate() {
 
 function renderInner() {
   const position = captureUiPosition();
-  const nextOverlayKey = state.commandOpen ? "command" : state.modal ? `modal:${state.modal}` : "";
+  const nextOverlayKey = state.commandOpen
+    ? "command"
+    : state.modal
+      ? `modal:${state.modal}`
+      : state.previewDocumentId
+        ? `preview:${state.previewDocumentId}`
+        : "";
   const openingOverlay = !activeOverlayKey && Boolean(nextOverlayKey);
   const closingOverlay = Boolean(activeOverlayKey) && !nextOverlayKey;
   const switchingOverlay = Boolean(activeOverlayKey) && Boolean(nextOverlayKey) && activeOverlayKey !== nextOverlayKey;
@@ -588,6 +601,7 @@ function openDocumentPreview(documentId) {
     notify("Документ не найден в текущем объекте", "error");
     return;
   }
+  globalThis.document.getElementById(`document-row-${document.id}`)?.focus({ preventScroll: true });
   state.selectedDocument = document;
   state.previewDocumentId = document.id;
   state.fileVersions = [];
@@ -1078,8 +1092,14 @@ root.addEventListener("click", (event) => {
       state.modalData = { templateId: Number(actionTarget.dataset.templateId) };
       state.modal = "replace-template";
     } else if (action === "add-template-to-object") {
+      const templateId = Number(actionTarget.dataset.templateId);
+      const template = state.templates.find((item) => Number(item.id) === templateId);
+      if (!template || !documentFileInfo(template).hasFile) {
+        notify("Сначала загрузите файл шаблона", "warning");
+        return;
+      }
       state.modalData = {
-        templateId: Number(actionTarget.dataset.templateId),
+        templateId,
         objectId: state.workspace?.object?.id || state.objects.find((object) => object.status !== "archived")?.id || null,
       };
       state.templateTargetGroups = state.workspace?.groups || [];
@@ -1817,7 +1837,13 @@ async function recoverWorkspaceForCurrentRoute() {
 
 function trapOverlayFocus(event) {
   if (event.key !== "Tab") return false;
-  const selector = state.commandOpen ? "[data-command-dialog]" : state.modal ? "[data-modal]" : null;
+  const selector = state.commandOpen
+    ? "[data-command-dialog]"
+    : state.modal
+      ? "[data-modal]"
+      : state.previewDocumentId
+        ? "[data-preview-drawer]"
+        : null;
   if (!selector) return false;
   const container = root.querySelector(selector);
   if (!container) return false;

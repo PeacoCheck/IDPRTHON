@@ -154,7 +154,7 @@
 
 .docx-preview__host {
   min-width: max-content;
-  padding: var(--space-6);
+  padding: var(--space-4);
 }
 
 .docx-preview__host .docx-wrapper {
@@ -164,6 +164,8 @@
 
 .docx-preview__host .docx-wrapper > section.docx-page {
   margin: 0 auto var(--space-4);
+  background: #ffffff !important;
+  color: #000000;
   box-shadow: var(--shadow-sm);
 }
 
@@ -263,7 +265,7 @@
   }
 
   .docx-preview__host {
-    padding: var(--space-3);
+    padding: var(--space-4);
     transform-origin: top left;
   }
 }

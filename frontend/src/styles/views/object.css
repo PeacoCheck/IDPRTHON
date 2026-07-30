@@ -540,8 +540,13 @@
 }
 
 .archive-document.is-expected .archive-document__filemark {
+  border-style: dashed;
   border-color: var(--status-warning);
   color: var(--status-warning);
+}
+
+.archive-document__mobile-state {
+  display: none;
 }
 
 .archive-document__identity,
@@ -1061,11 +1066,7 @@
   }
 
   .archive-document {
-    grid-template-columns: 44px minmax(170px, 1.5fr) minmax(110px, .7fr) auto;
-  }
-
-  .archive-document__state {
-    display: none;
+    grid-template-columns: 44px minmax(170px, 1.5fr) minmax(110px, .7fr) 112px auto;
   }
 }
 
@@ -1140,6 +1141,15 @@
 
   .archive-document__type {
     display: none;
+  }
+
+  .archive-document__state {
+    display: none;
+  }
+
+  .archive-document__mobile-state {
+    display: inline-flex;
+    margin-top: 3px;
   }
 
   .archive-document__actions .icon-button {

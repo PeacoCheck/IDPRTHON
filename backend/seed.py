@@ -248,42 +248,11 @@ def _seed_templates(db) -> dict[str, Template]:
             {"key": "pressure", "label": "Испытательное давление", "required": True, "source": "manual"},
             {"key": "duration", "label": "Продолжительность", "required": True, "source": "manual"},
         ], "Акты гидравлических испытаний из объектов теплосетей"),
-        ("equipment_acceptance", "Акт приёмки оборудования после ремонта", "acts", common_fields + [
-            {"key": "equipment", "label": "Оборудование", "required": True, "source": "manual"},
-            {"key": "inventory_number", "label": "Инвентарный номер", "required": True, "source": "manual"},
-            {"key": "repair_period", "label": "Срок ремонта", "required": True, "source": "manual"},
-        ], "Типовая форма заказчика"),
-        ("dismantling_act", "Акт демонтажа оборудования или трубопровода", "acts", common_fields + [
-            {"key": "act.number", "label": "Номер акта", "required": True, "source": "manual"},
-            {"key": "equipment", "label": "Оборудование или участок", "required": True, "source": "manual"},
-            {"key": "inventory_number", "label": "Инвентарный номер", "required": False, "source": "manual"},
-            {"key": "scope", "label": "Объём демонтажа", "required": True, "source": "manual"},
-            {"key": "result", "label": "Результат и состояние", "required": True, "source": "manual"},
-        ], "Повторяемая форма из пакета «СН_замена арматуры»"),
-        ("installation_act", "Акт монтажа оборудования или трубопровода", "acts", common_fields + [
-            {"key": "act.number", "label": "Номер акта", "required": True, "source": "manual"},
-            {"key": "equipment", "label": "Оборудование или участок", "required": True, "source": "manual"},
-            {"key": "inventory_number", "label": "Инвентарный номер", "required": False, "source": "manual"},
-            {"key": "scope", "label": "Выполненные монтажные работы", "required": True, "source": "preset.work_title"},
-            {"key": "materials", "label": "Материалы и документы качества", "required": True, "source": "manual"},
-        ], "Повторяемая форма из пакета «СН_замена арматуры»"),
-        ("repair_readiness", "Акт готовности оборудования к ремонту", "acts", common_fields + [
-            {"key": "equipment", "label": "Оборудование", "required": True, "source": "manual"},
-            {"key": "inventory_number", "label": "Инвентарный номер", "required": True, "source": "manual"},
-            {"key": "defect_statement", "label": "Дефектная ведомость", "required": True, "source": "manual"},
-            {"key": "prepared_state", "label": "Состояние перед передачей", "required": True, "source": "manual"},
-        ], "Комплекты ремонта котлов и технологического оборудования"),
         ("appointment_order", "Приказ о назначении ответственных лиц", "permits", common_fields + [
             {"key": "order.number", "label": "Номер приказа", "required": True, "source": "object.meta.responsible_person.order"},
             {"key": "order.date", "label": "Дата приказа", "required": True, "source": "manual"},
             {"key": "responsibilities", "label": "Обязанности и зона ответственности", "required": True, "source": "manual"},
         ], "Приказы и разрешительные комплекты объектов архива"),
-        ("defect_statement", "Дефектная ведомость", "source", common_fields + [
-            {"key": "equipment", "label": "Оборудование или узел", "required": True, "source": "manual"},
-            {"key": "inventory_number", "label": "Инвентарный номер", "required": False, "source": "manual"},
-            {"key": "defects", "label": "Выявленные дефекты", "required": True, "source": "manual"},
-            {"key": "repair_scope", "label": "Требуемый объём ремонта", "required": True, "source": "manual"},
-        ], "Дефектные ведомости ремонтных объектов архива"),
         ("executive_scheme", "Исполнительная схема", "schemes", common_fields + [
             {"key": "scheme.number", "label": "Номер схемы", "required": True, "source": "manual"},
             {"key": "system", "label": "Система, узел или участок", "required": True, "source": "manual"},
@@ -300,11 +269,18 @@ def _seed_templates(db) -> dict[str, Template]:
             _general_journal_fields(),
             "Официальная форма по приказу Минстроя России № 1026/пр от 02.12.2022",
         ),
-        ("welding_journal", "Журнал сварочных работ", "journals", common_fields + [
-            {"key": "welding_manager", "label": "Руководитель сварки", "required": True, "source": "manual"},
-            {"key": "weld_rows", "label": "Сварные соединения", "required": False, "source": "manual"},
-        ], "Сварочные журналы объектов теплосетей"),
     ]
+    active_doc_types = {row[0] for row in rows}
+    legacy_defaults = db.scalars(
+        select(Template).where(
+            Template.is_default.is_(True),
+            Template.doc_type.notin_(active_doc_types),
+        )
+    ).all()
+    for template in legacy_defaults:
+        if not template.template_file:
+            template.is_active = False
+
     result: dict[str, Template] = {}
     for doc_type, title, group_kind, fields, source in rows:
         template = db.scalar(select(Template).where(Template.doc_type == doc_type, Template.is_default.is_(True)))

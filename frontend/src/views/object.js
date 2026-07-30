@@ -217,17 +217,18 @@ function renderQuickFilters(state, documents) {
 
 function renderDocumentRow(document, state) {
   const file = documentFileInfo(document);
-  const extension = file.extension ? file.extension.toLocaleUpperCase("ru-RU") : "—";
+  const extension = file.extension ? file.extension.toLocaleUpperCase("ru-RU").slice(0, 4) : "ОЖИД.";
   const selected = Number(state.previewDocumentId) === Number(document.id);
   return `<article class="archive-document${selected ? " is-selected" : ""}${file.hasFile ? "" : " is-expected"}" id="document-row-${escapeHtml(document.id)}" tabindex="0" data-document="${escapeHtml(document.id)}" aria-label="Открыть ${escapeHtml(document.title || file.fileName)}">
-    <span class="archive-document__filemark mono" aria-hidden="true">${escapeHtml(extension.slice(0, 4))}</span>
+    <span class="archive-document__filemark mono" aria-hidden="true">${escapeHtml(extension)}</span>
     <div class="archive-document__identity">
       <span class="archive-document__number mono">${escapeHtml(document.number || `ID-${document.id}`)}</span>
       <strong>${escapeHtml(document.title || file.fileName || "Документ без названия")}</strong>
       <small title="${escapeHtml(file.fileName)}">${file.hasFile ? escapeHtml(file.fileName) : "Ожидаемая запись — файл ещё не добавлен"}</small>
+      <span class="archive-document__mobile-state">${completionBadge(document.completion_status)}</span>
     </div>
     <div class="archive-document__type"><span>${escapeHtml(documentTypeLabels[document.doc_type] || "Документ")}</span><small>${escapeHtml(document.document_date || "Без даты")}</small></div>
-    <div class="archive-document__state">${file.hasFile ? completionBadge(document.completion_status) : badge({ label: "Нет файла", tone: "warning", iconName: "upload" })}<small>${file.hasFile ? formatFileSize(file.size) : "ожидается"}</small></div>
+    <div class="archive-document__state">${completionBadge(document.completion_status)}</div>
     <div class="archive-document__actions">
       ${file.hasFile ? iconButton({ label: "Скачать файл", action: "download-source-document", iconName: "download", attributes: `data-document-id="${escapeHtml(document.id)}"` }) : ""}
       ${iconButton({ label: "Убрать из реестра", action: "delete-document", iconName: "trash", attributes: `data-document-id="${escapeHtml(document.id)}"` })}
@@ -309,12 +310,13 @@ function renderPreviewDrawer(state, documents) {
   if (!document) return "";
   const file = documentFileInfo(document);
   const busy = isBusy(state, "upload-document-file", document.id);
+  const titleId = `preview-drawer-title-${escapeHtml(document.id)}`;
   return `<div class="preview-drawer-layer" data-preview-layer>
     <button class="preview-drawer-backdrop" type="button" data-action="close-document-preview" aria-label="Закрыть предпросмотр"></button>
-    <aside class="preview-drawer" data-preview-drawer aria-label="Предпросмотр документа">
+    <aside class="preview-drawer" data-preview-drawer role="dialog" aria-modal="true" aria-labelledby="${titleId}">
       <header class="preview-drawer__header">
-        <div><span class="mono">${escapeHtml(document.number || `ID-${document.id}`)}</span><h2>${escapeHtml(document.title || file.fileName)}</h2><small>${escapeHtml(file.fileName)}${file.hasFile ? ` · ${escapeHtml(formatFileSize(file.size))}` : ""}</small></div>
-        ${iconButton({ label: "Закрыть предпросмотр", action: "close-document-preview", iconName: "close" })}
+        <div><span class="mono">${escapeHtml(document.number || `ID-${document.id}`)}</span><h2 id="${titleId}">${escapeHtml(document.title || file.fileName)}</h2><small>${escapeHtml(file.fileName)}${file.hasFile ? ` · ${escapeHtml(formatFileSize(file.size))}` : ""}</small></div>
+        ${iconButton({ label: "Закрыть предпросмотр", action: "close-document-preview", iconName: "close", attributes: "data-preview-close autofocus" })}
       </header>
       <div class="preview-drawer__status"><span>${completionBadge(document.completion_status)}</span><label><span class="sr-only">Состояние документа</span><select class="select" data-action="change-completion" data-document="${escapeHtml(document.id)}">${Object.entries(completionMeta).map(([value, meta]) => `<option value="${value}"${value === document.completion_status ? " selected" : ""}>${meta.label}</option>`).join("")}</select></label></div>
       <div class="preview-drawer__body">${renderFilePreview(document, { compact: true })}</div>

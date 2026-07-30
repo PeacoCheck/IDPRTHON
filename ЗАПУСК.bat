@@ -21,7 +21,7 @@ call npm run build
 if errorlevel 1 goto :error
 popd
 
-"%IDV_PY%" app.py
+"%IDV_PY%" app.py %*
 if errorlevel 1 goto :error
 exit /b 0
 

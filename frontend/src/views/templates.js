@@ -84,9 +84,19 @@ function renderTemplateCard(state, template) {
   const file = documentFileInfo(template);
   const extension = file.extension ? file.extension.toLocaleUpperCase("ru-RU") : "—";
   const replacing = isBusy(state, "replace-template-file", template.id);
+  const templateId = escapeHtml(template.id);
+  const addButton = button({
+    label: "Добавить в объект",
+    action: "add-template-to-object",
+    iconName: "plus",
+    variant: "primary",
+    size: "sm",
+    disabled: !file.hasFile,
+    attributes: `data-template-id="${templateId}"`,
+  });
   return `<article class="archive-template-card${file.hasFile ? "" : " is-fileless"}" id="template-card-${escapeHtml(template.id)}" data-template-card data-template-id="${escapeHtml(template.id)}">
     <header class="archive-template-card__header">
-      <span class="template-file-stamp mono">${escapeHtml(extension.slice(0, 5))}</span>
+      <span class="template-file-stamp mono${file.hasFile ? "" : " is-empty"}">${file.hasFile ? escapeHtml(extension.slice(0, 5)) : "НЕТ<br>ФАЙЛА"}</span>
       <div><span class="technical-eyebrow">${escapeHtml(GROUP_LABELS[template.group_kind] || "Библиотека")}</span><h2>${escapeHtml(template.title || "Шаблон без названия")}</h2></div>
       ${template.is_default ? badge({ label: "Основной", tone: "primary" }) : ""}
     </header>
@@ -98,13 +108,14 @@ function renderTemplateCard(state, template) {
     <p class="archive-template-card__note">${escapeHtml(template.notes || template.source_example || "Готовый файл для копирования в архив объекта.")}</p>
     <footer class="archive-template-card__footer">
       <div>
+        ${file.hasFile ? "" : button({ label: "Загрузить файл", action: "replace-template", iconName: "upload", variant: "secondary", size: "sm", disabled: replacing, attributes: `data-template-id="${templateId}" aria-busy="${replacing}"` })}
         ${file.hasFile ? iconButton({ label: "Предпросмотр", action: "preview-template", iconName: "search", attributes: `data-template-id="${escapeHtml(template.id)}"` }) : ""}
         ${file.hasFile ? `<a class="icon-button" href="${templateDownloadUrl(template.id)}" download aria-label="Скачать шаблон">${icon("download", 17)}</a>` : ""}
-        ${iconButton({ label: "Заменить файл", action: "replace-template", iconName: "refresh", disabled: replacing, attributes: `data-template-id="${escapeHtml(template.id)}" aria-busy="${replacing}"` })}
+        ${file.hasFile ? iconButton({ label: "Заменить файл", action: "replace-template", iconName: "refresh", disabled: replacing, attributes: `data-template-id="${templateId}" aria-busy="${replacing}"` }) : ""}
         ${iconButton({ label: "Дублировать шаблон", action: "duplicate-template", iconName: "copy", attributes: `data-template-id="${escapeHtml(template.id)}"` })}
         ${iconButton({ label: "В архив", action: "archive-template", iconName: "archive", attributes: `data-template-id="${escapeHtml(template.id)}"` })}
       </div>
-      ${button({ label: "Добавить в объект", action: "add-template-to-object", iconName: "plus", variant: "primary", size: "sm", disabled: !file.hasFile, attributes: `data-template-id="${escapeHtml(template.id)}"` })}
+      ${file.hasFile ? addButton : `<span class="template-add-disabled" data-tooltip="Сначала загрузите файл шаблона" tabindex="0" aria-label="Добавить в объект недоступно: сначала загрузите файл шаблона">${addButton}</span>`}
     </footer>
   </article>`;
 }
@@ -119,7 +130,13 @@ export function renderTemplatesView(state) {
   const query = normalizedQuery(state.templateQuery);
   const category = state.templateCategory || "all";
   const categories = [...new Set(templates.map((template) => template.doc_type).filter(Boolean))].sort((a, b) => docTypeLabel(a).localeCompare(docTypeLabel(b), "ru"));
-  const visible = templates.filter((template) => templateMatches(template, query, category));
+  const visible = templates
+    .filter((template) => templateMatches(template, query, category))
+    .sort((left, right) => {
+      const fileOrder = Number(documentFileInfo(right).hasFile) - Number(documentFileInfo(left).hasFile);
+      if (fileOrder) return fileOrder;
+      return String(left.title || "").localeCompare(String(right.title || ""), "ru", { sensitivity: "base" });
+    });
 
   let content;
   if (state.templateError) {
@@ -175,9 +192,10 @@ function renderNewTemplateModal(state) {
 function renderReplaceTemplateModal(state) {
   const template = templateById(state, state.modalData?.templateId);
   if (!template) return "";
+  const hasFile = documentFileInfo(template).hasFile;
   const replacing = isBusy(state, "replace-template-file", template.id);
-  const body = `<form id="replaceTemplateFileForm" class="template-modal-form" enctype="multipart/form-data"><input type="hidden" name="template_id" value="${escapeHtml(template.id)}">${state.modalData?.error ? `<div class="template-modal-error" role="alert">${icon("alertCircle", 16)}<span>${escapeHtml(state.modalData.error)}</span></div>` : ""}<div class="replace-template-current"><span class="template-file-stamp mono">${escapeHtml(documentFileInfo(template).extension.toLocaleUpperCase("ru-RU") || "—")}</span><div><strong>${escapeHtml(template.title)}</strong><small>Текущая версия: ${escapeHtml(template.version || 1)}</small></div></div><label class="template-dropzone">${icon("refresh", 26)}<span><strong>Выберите новую версию</strong><small>DOCX, XLSX или PDF. Новый файл станет текущей версией шаблона.</small><em class="template-dropzone__filename">Файл не выбран</em></span><input name="file" type="file" required accept=".docx,.xlsx,.pdf"></label></form>`;
-  return modal({ title: "Заменить файл шаблона", description: "Метаданные и место в библиотеке сохранятся.", body, footer: `${button({ label: "Отмена", action: "close-modal", variant: "secondary", disabled: replacing })}${button({ label: "Сохранить новую версию", action: "replace-template-file", iconName: "refresh", variant: "primary", type: "submit", disabled: replacing, attributes: `form="replaceTemplateFileForm" aria-busy="${replacing}"` })}`, size: "lg", labelledBy: "replaceTemplateModalTitle" });
+  const body = `<form id="replaceTemplateFileForm" class="template-modal-form" enctype="multipart/form-data"><input type="hidden" name="template_id" value="${escapeHtml(template.id)}">${state.modalData?.error ? `<div class="template-modal-error" role="alert">${icon("alertCircle", 16)}<span>${escapeHtml(state.modalData.error)}</span></div>` : ""}<div class="replace-template-current"><span class="template-file-stamp mono${hasFile ? "" : " is-empty"}">${hasFile ? escapeHtml(documentFileInfo(template).extension.toLocaleUpperCase("ru-RU") || "—") : "НЕТ<br>ФАЙЛА"}</span><div><strong>${escapeHtml(template.title)}</strong><small>${hasFile ? `Текущая версия: ${escapeHtml(template.version || 1)}` : "Файл ещё не загружен"}</small></div></div><label class="template-dropzone">${icon(hasFile ? "refresh" : "upload", 26)}<span><strong>${hasFile ? "Выберите новую версию" : "Выберите файл шаблона"}</strong><small>DOCX, XLSX или PDF. ${hasFile ? "Новый файл станет текущей версией шаблона." : "После загрузки шаблон можно будет добавить в объект."}</small><em class="template-dropzone__filename">Файл не выбран</em></span><input name="file" type="file" required accept=".docx,.xlsx,.pdf"></label></form>`;
+  return modal({ title: hasFile ? "Заменить файл шаблона" : "Загрузить файл шаблона", description: "Метаданные и место в библиотеке сохранятся.", body, footer: `${button({ label: "Отмена", action: "close-modal", variant: "secondary", disabled: replacing })}${button({ label: hasFile ? "Сохранить новую версию" : "Загрузить файл", action: "replace-template-file", iconName: hasFile ? "refresh" : "upload", variant: "primary", type: "submit", disabled: replacing, attributes: `form="replaceTemplateFileForm" aria-busy="${replacing}"` })}`, size: "lg", labelledBy: "replaceTemplateModalTitle" });
 }
 
 function renderAddToObjectModal(state) {
