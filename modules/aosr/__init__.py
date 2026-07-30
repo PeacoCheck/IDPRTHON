@@ -1,1 +1,0 @@
-"""AOSR module."""
