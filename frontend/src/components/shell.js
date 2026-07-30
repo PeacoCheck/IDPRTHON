@@ -1,9 +1,10 @@
 import { icon } from "./icons.js";
+import { escapeHtml } from "./ui.js";
 
 const routeTitles = {
   objects: "Объекты",
   object: "Рабочее пространство",
-  editor: "Редактор документа",
+  editor: "Файл документа",
   templates: "Шаблоны",
 };
 
@@ -15,7 +16,8 @@ function railLink(route, label, iconName, activeRoute) {
 export function shell(state, content, { actions = "" } = {}) {
   const title = routeTitles[state.route] || routeTitles.objects;
   const context = state.workspace?.object || state.app?.currentObject || null;
-  return `<div class="shell">
+  const previewOpen = state.route === "object" && Boolean(state.previewDocumentId);
+  return `<div class="shell${previewOpen ? " shell--preview-open" : ""}">
     <aside class="rail" aria-label="Основная навигация">
       <a class="rail__brand" href="#/objects" data-route="objects" aria-label="ID Vault"><span>ID</span></a>
       <nav class="rail__nav">
@@ -31,7 +33,7 @@ export function shell(state, content, { actions = "" } = {}) {
     <header class="topbar">
       <div class="topbar__title">
         <span>${title}</span>
-        ${context && state.route !== "objects" ? `<span class="topbar__separator">/</span><span class="topbar__context mono">${context.code}</span>` : ""}
+        ${context && state.route !== "objects" ? `<span class="topbar__separator">/</span><span class="topbar__context mono">${escapeHtml(context.code || "")}</span>` : ""}
       </div>
       <button class="topbar__search" type="button" data-action="open-command">${icon("search", 16)}<span>Поиск по ID Vault</span><kbd>Ctrl K</kbd></button>
       <div class="topbar__actions">${actions}</div>

@@ -1,11 +1,11 @@
 import { icon } from "../components/icons.js";
-import { badge, button, emptyState, escapeHtml, modal, skeleton } from "../components/ui.js";
-
-const dateFormat = new Intl.DateTimeFormat("ru-RU", {
-  day: "2-digit",
-  month: "2-digit",
-  year: "numeric",
-});
+import {
+  documentFileInfo,
+  formatFileDate,
+  formatFileSize,
+  renderFilePreview,
+} from "../components/file-preview.js";
+import { badge, button, emptyState, escapeHtml, iconButton, modal, skeleton } from "../components/ui.js";
 
 const DOC_TYPE_LABELS = {
   aosr: "АОСР",
@@ -16,7 +16,7 @@ const DOC_TYPE_LABELS = {
   equipment_acceptance: "Приёмка оборудования",
   executive_scheme: "Исполнительные схемы",
   general_journal: "Общие журналы",
-  hydro: "Гидравлические испытания",
+  hydro: "Испытания",
   incoming_control: "Входной контроль",
   incoming_journal: "Журналы входного контроля",
   installation_act: "Акты монтажа",
@@ -31,37 +31,16 @@ const DOC_TYPE_LABELS = {
   working_documentation: "Рабочая документация",
 };
 
-const BUILTIN_MAPPINGS = [
-  ["document.number", "Документ — номер"],
-  ["document.date", "Документ — дата"],
-  ["document.title", "Документ — наименование"],
-  ["document.work_title", "Документ — выполненные работы"],
-  ["object.code", "Объект — код"],
-  ["object.name", "Объект — полное наименование"],
-  ["object.address", "Объект — адрес"],
-  ["object.meta.work_kind", "Объект — вид работ"],
-  ["object.meta.construction_permit", "Объект — разрешение на строительство"],
-  ["object.meta.project_documentation", "Объект — рабочая документация"],
-  ["object.meta.project_expertise", "Объект — экспертиза проекта"],
-  ["object.meta.start_date", "Объект — дата начала"],
-  ["object.meta.end_date", "Объект — дата окончания"],
-  ["customer.name", "Заказчик — организация"],
-  ["contractor.name", "Подрядчик — организация"],
-  ["object.meta.designer.name", "Проектировщик — организация"],
-  ["object.meta.technical_customer.name", "Технический заказчик — организация"],
-  ["responsible.fio", "Ответственный — ФИО"],
-  ["object.meta.responsible_person.position", "Ответственный — должность"],
-  ["object.meta.responsible_person.order", "Ответственный — приказ"],
-];
-
-const MARKER_ALIASES = {
-  construction_type: "object.meta.work_kind",
-  journal_date: "document.date",
-  journal_number: "document.number",
-  object_address: "object.address",
-  object_name: "object.name",
-  podryad: "contractor.name",
-  zakaz: "customer.name",
+const GROUP_LABELS = {
+  acts: "Акты и испытания",
+  journals: "Журналы",
+  permits: "Разрешительная документация",
+  quality: "Материалы и паспорта",
+  registry: "Реестр",
+  schemes: "Исполнительные схемы",
+  source: "Исходные документы",
+  working: "Рабочая документация",
+  other: "Прочее",
 };
 
 function templatesFrom(state) {
@@ -72,425 +51,158 @@ function normalizedQuery(value) {
   return String(value || "").trim().toLocaleLowerCase("ru-RU");
 }
 
-function docTypeLabel(value) {
-  const type = String(value || "other");
-  if (DOC_TYPE_LABELS[type]) return DOC_TYPE_LABELS[type];
-  return "Другие документы";
-}
-
-function formatTemplateDate(template) {
-  const value = template?.updated_at || template?.created_at;
-  if (!value) return "Дата не указана";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "Дата не указана" : dateFormat.format(date);
-}
-
-function numeric(value, fallback = 0) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
-
-function plural(value, one, few, many) {
-  const absolute = Math.abs(value) % 100;
-  const last = absolute % 10;
-  if (absolute > 10 && absolute < 20) return many;
-  if (last === 1) return one;
-  if (last > 1 && last < 5) return few;
-  return many;
-}
-
-function isBusy(state, ...actions) {
+function isBusy(state, action, id = null) {
   const busy = String(state.busyAction || "");
-  return actions.some((action) => busy === action || busy.startsWith(`${action}:`) || busy.startsWith(`${action}-`));
+  return busy === action || (id !== null && [
+    `${action}:${id}`,
+    `${action}-${id}`,
+  ].includes(busy));
 }
 
-function templateStatusBadges(template) {
-  const active = template?.is_active !== false;
-  return `<span class="template-card__badges">
-    ${badge({
-      label: active ? "Активен" : "Неактивен",
-      tone: active ? "ready" : "neutral",
-      iconName: active ? "checkCircle" : "circle",
-    })}
-    ${template?.is_default ? badge({ label: "Основной", tone: "primary", iconName: "check" }) : ""}
-  </span>`;
+function option(value, label, selectedValue = null) {
+  const selected = selectedValue !== null && selectedValue !== undefined && String(value) === String(selectedValue);
+  return `<option value="${escapeHtml(value)}"${selected ? " selected" : ""}>${escapeHtml(label)}</option>`;
+}
+
+function docTypeLabel(value) {
+  return DOC_TYPE_LABELS[value] || "Документ";
 }
 
 function templateMatches(template, query, category) {
-  if (category !== "all" && String(template.doc_type || "other") !== category) return false;
+  if (category !== "all" && template.doc_type !== category) return false;
   if (!query) return true;
-  const fields = Array.isArray(template.fields_json) ? template.fields_json : [];
-  return [
-    template.title,
-    template.doc_type,
-    docTypeLabel(template.doc_type),
-    ...fields.flatMap((field) => [field?.key, field?.label]),
-  ].some((value) => String(value || "").toLocaleLowerCase("ru-RU").includes(query));
+  const file = documentFileInfo(template);
+  return [template.title, template.doc_type, template.notes, template.source_example, file.fileName]
+    .some((value) => String(value || "").toLocaleLowerCase("ru-RU").includes(query));
 }
 
-function renderTemplateCard(template) {
-  const fields = Array.isArray(template.fields_json) ? template.fields_json : [];
-  const requiredCount = fields.filter((field) => field?.required).length;
-  const templateId = escapeHtml(template.id);
-  const title = template.title || "Шаблон без названия";
-  const fileConnected = Boolean(template.template_file);
+function templateDownloadUrl(templateId) {
+  return `/api/templates/${encodeURIComponent(templateId)}/file`;
+}
 
-  return `<article class="template-card" data-template-card="${templateId}">
-    <div class="template-docx-preview" aria-label="Предпросмотр DOCX-шаблона">
-      <span class="template-docx-preview__file">${icon("fileText", 24)}<strong>DOCX</strong></span>
-      <span class="template-docx-preview__state">${icon(fileConnected ? "checkCircle" : "alertCircle", 14)}${escapeHtml(fileConnected ? "Файл подключён" : "Файл не загружен")}</span>
+function renderTemplateCard(state, template) {
+  const file = documentFileInfo(template);
+  const extension = file.extension ? file.extension.toLocaleUpperCase("ru-RU") : "—";
+  const replacing = isBusy(state, "replace-template-file", template.id);
+  return `<article class="archive-template-card${file.hasFile ? "" : " is-fileless"}" id="template-card-${escapeHtml(template.id)}" data-template-card data-template-id="${escapeHtml(template.id)}">
+    <header class="archive-template-card__header">
+      <span class="template-file-stamp mono">${escapeHtml(extension.slice(0, 5))}</span>
+      <div><span class="technical-eyebrow">${escapeHtml(GROUP_LABELS[template.group_kind] || "Библиотека")}</span><h2>${escapeHtml(template.title || "Шаблон без названия")}</h2></div>
+      ${template.is_default ? badge({ label: "Основной", tone: "primary" }) : ""}
+    </header>
+    <div class="archive-template-card__file">
+      <span>${icon(file.hasFile ? "fileText" : "alertCircle", 18)}</span>
+      <div><strong title="${escapeHtml(file.fileName)}">${escapeHtml(file.fileName)}</strong><small>${file.hasFile ? `${escapeHtml(formatFileSize(file.size))} · обновлён ${escapeHtml(formatFileDate(file.updatedAt))}` : "Загрузите DOCX, XLSX или PDF"}</small></div>
+      <span class="template-version mono">v${escapeHtml(template.version || 1)}</span>
     </div>
-    <div class="template-card__body">
-      ${templateStatusBadges(template)}
-      <div class="template-card__identity">
-        <h2>${escapeHtml(title)}</h2>
-        <span class="template-card__type">${escapeHtml(docTypeLabel(template.doc_type))}</span>
+    <p class="archive-template-card__note">${escapeHtml(template.notes || template.source_example || "Готовый файл для копирования в архив объекта.")}</p>
+    <footer class="archive-template-card__footer">
+      <div>
+        ${file.hasFile ? iconButton({ label: "Предпросмотр", action: "preview-template", iconName: "search", attributes: `data-template-id="${escapeHtml(template.id)}"` }) : ""}
+        ${file.hasFile ? `<a class="icon-button" href="${templateDownloadUrl(template.id)}" download aria-label="Скачать шаблон">${icon("download", 17)}</a>` : ""}
+        ${iconButton({ label: "Заменить файл", action: "replace-template", iconName: "refresh", disabled: replacing, attributes: `data-template-id="${escapeHtml(template.id)}" aria-busy="${replacing}"` })}
+        ${iconButton({ label: "Дублировать шаблон", action: "duplicate-template", iconName: "copy", attributes: `data-template-id="${escapeHtml(template.id)}"` })}
+        ${iconButton({ label: "В архив", action: "archive-template", iconName: "archive", attributes: `data-template-id="${escapeHtml(template.id)}"` })}
       </div>
-      <dl class="template-card__facts">
-        <div><dt>Версия</dt><dd class="mono">v${escapeHtml(numeric(template.version, 1))}</dd></div>
-        <div><dt>Обновлён</dt><dd><time>${escapeHtml(formatTemplateDate(template))}</time></dd></div>
-        <div><dt>Поля</dt><dd class="tabular">${escapeHtml(fields.length)}</dd></div>
-        <div><dt>Обязательные</dt><dd class="tabular">${escapeHtml(requiredCount)}</dd></div>
-      </dl>
-    </div>
-    <footer class="template-card__footer">
-      <span>${escapeHtml(fileConnected ? "Готов к сопоставлению маркеров" : "Требуется файл Word")}</span>
-      ${button({
-        label: "Подробнее",
-        action: "template-details",
-        iconName: "chevronRight",
-        variant: "secondary",
-        size: "sm",
-        attributes: `data-template-id="${templateId}"`,
-      })}
+      ${button({ label: "Добавить в объект", action: "add-template-to-object", iconName: "plus", variant: "primary", size: "sm", disabled: !file.hasFile, attributes: `data-template-id="${escapeHtml(template.id)}"` })}
     </footer>
   </article>`;
 }
 
-function renderTemplatesContent(state, templates, visibleTemplates, query, category) {
-  if (state.loading) {
-    return `<div class="templates-grid templates-grid--skeleton">${skeleton("card", 6)}</div>`;
-  }
-
-  if (state.error && !templates.length) {
-    return `<div class="templates-feedback templates-feedback--error">${emptyState({
-      iconName: "alertCircle",
-      title: "Не удалось загрузить шаблоны",
-      description: state.error,
-      action: button({ label: "Повторить", action: "retry-templates", iconName: "refresh", variant: "secondary" }),
-    })}</div>`;
-  }
-
-  if (!templates.length) {
-    return `<div class="templates-feedback">${emptyState({
-      iconName: "fileText",
-      title: "Шаблонов пока нет",
-      description: "Добавьте DOCX к существующей форме, чтобы использовать её для документов объекта.",
-      action: button({ label: "Загрузить DOCX", action: "upload-template", iconName: "upload", variant: "secondary" }),
-    })}</div>`;
-  }
-
-  if (!visibleTemplates.length) {
-    const filtered = category !== "all" || Boolean(query);
-    return `<div class="templates-feedback">${emptyState({
-      iconName: "search",
-      title: "Шаблоны не найдены",
-      description: filtered
-        ? "Измените запрос или сбросьте выбранную категорию."
-        : "Для этого раздела пока нет доступных шаблонов.",
-      action: button({ label: "Сбросить фильтры", action: "clear-template-filters", variant: "secondary" }),
-    })}</div>`;
-  }
-
-  return `<div class="templates-grid">${visibleTemplates.map(renderTemplateCard).join("")}</div>`;
+function renderLoading() {
+  return `<section class="view-frame templates-view" data-view="templates"><div class="templates-header">${skeleton("line", 2)}</div><div class="template-library-grid">${skeleton("card", 6)}</div></section>`;
 }
 
 export function renderTemplatesView(state) {
-  const templates = templatesFrom(state);
-  const templateState = { ...state, error: state.templateError || null };
+  if (state.loading && !state.templates?.length) return renderLoading();
+  const templates = templatesFrom(state).filter((template) => template.is_active !== false);
   const query = normalizedQuery(state.templateQuery);
-  const categories = [...new Set(templates.map((template) => String(template.doc_type || "other")))]
-    .sort((left, right) => docTypeLabel(left).localeCompare(docTypeLabel(right), "ru"));
-  const requestedCategory = String(state.templateCategory || "all");
-  const category = categories.includes(requestedCategory) ? requestedCategory : "all";
-  const visibleTemplates = templates.filter((template) => templateMatches(template, query, category));
-  const uploading = isBusy(state, "upload-template", "upload-template-file");
+  const category = state.templateCategory || "all";
+  const categories = [...new Set(templates.map((template) => template.doc_type).filter(Boolean))].sort((a, b) => docTypeLabel(a).localeCompare(docTypeLabel(b), "ru"));
+  const visible = templates.filter((template) => templateMatches(template, query, category));
+
+  let content;
+  if (state.templateError) {
+    content = emptyState({ iconName: "alertCircle", title: "Не удалось открыть библиотеку", description: state.templateError, action: button({ label: "Повторить", action: "retry-templates", iconName: "refresh", variant: "secondary" }) });
+  } else if (!templates.length) {
+    content = emptyState({ iconName: "templates", title: "Библиотека пока пуста", description: "Добавьте готовый DOCX, XLSX или PDF. ID Vault сохранит оригинал без изменения содержимого.", action: button({ label: "Добавить шаблон", action: "new-template", iconName: "upload", variant: "primary" }) });
+  } else if (!visible.length) {
+    content = emptyState({ iconName: "search", title: "Шаблоны не найдены", description: "Измените запрос или категорию.", action: button({ label: "Сбросить фильтры", action: "clear-template-filters", variant: "secondary" }) });
+  } else {
+    content = `<div class="template-library-grid" data-auto-animate="templates">${visible.map((template) => renderTemplateCard(state, template)).join("")}</div>`;
+  }
 
   return `<section class="view-frame templates-view" data-view="templates">
-    <header class="templates-header">
-      <div>
-        <h1>Шаблоны документов</h1>
-        <p>DOCX-формы и их связь с данными исполнительной документации.</p>
-      </div>
-      ${button({
-        label: "Загрузить DOCX",
-        action: "upload-template",
-        iconName: "upload",
-        variant: "primary",
-        disabled: uploading,
-        attributes: `aria-busy="${uploading}"`,
-      })}
-    </header>
-
+    <header class="templates-header"><div><span class="technical-eyebrow">Файловая библиотека</span><h1>Шаблоны документов</h1><p>Готовые оригиналы — скачать, заменить или скопировать в архив объекта.</p></div>${button({ label: "Добавить шаблон", action: "new-template", iconName: "upload", variant: "primary" })}</header>
     <div class="templates-toolbar">
-      <label class="templates-search" for="templateSearch">
-        <span class="sr-only">Найти шаблон</span>
-        ${icon("search", 16)}
-        <input id="templateSearch" class="control" type="search" value="${escapeHtml(state.templateQuery || "")}" placeholder="Название, тип или поле" autocomplete="off">
-      </label>
-      <div class="templates-categories" role="tablist" aria-label="Тип документа">
-        <button class="templates-category${category === "all" ? " is-active" : ""}" type="button" role="tab" aria-selected="${category === "all"}" data-action="filter-templates" data-template-category="all">Все <span class="tabular">${escapeHtml(templates.length)}</span></button>
-        ${categories.map((docType) => {
-          const count = templates.filter((template) => String(template.doc_type || "other") === docType).length;
-          return `<button class="templates-category${category === docType ? " is-active" : ""}" type="button" role="tab" aria-selected="${category === docType}" data-action="filter-templates" data-template-category="${escapeHtml(docType)}">${escapeHtml(docTypeLabel(docType))} <span class="tabular">${escapeHtml(count)}</span></button>`;
-        }).join("")}
-      </div>
-      <span class="templates-result-count" aria-live="polite">${state.loading ? "Загрузка" : `${escapeHtml(visibleTemplates.length)} из ${escapeHtml(templates.length)}`}</span>
+      <label class="templates-search" for="templateSearch">${icon("search", 16)}<span class="sr-only">Найти шаблон</span><input id="templateSearch" class="control" type="search" value="${escapeHtml(state.templateQuery || "")}" placeholder="Название или имя файла" autocomplete="off"></label>
+      <div class="templates-categories" role="tablist" aria-label="Типы шаблонов"><button class="templates-category${category === "all" ? " is-active" : ""}" type="button" role="tab" aria-selected="${category === "all"}" data-action="filter-templates" data-template-category="all">Все <span class="tabular">${templates.length}</span></button>${categories.map((value) => `<button class="templates-category${category === value ? " is-active" : ""}" type="button" role="tab" aria-selected="${category === value}" data-action="filter-templates" data-template-category="${escapeHtml(value)}">${escapeHtml(docTypeLabel(value))}<span class="tabular">${templates.filter((item) => item.doc_type === value).length}</span></button>`).join("")}</div>
+      <span class="templates-result"><strong class="tabular">${visible.length}</strong> шаблонов</span>
     </div>
-
-    ${templateState.error && templates.length ? `<div class="templates-inline-error" role="alert">${icon("alertCircle", 18)}<span>${escapeHtml(templateState.error)}</span>${button({ label: "Повторить", action: "retry-templates", variant: "secondary", size: "sm" })}</div>` : ""}
-    ${renderTemplatesContent(templateState, templates, visibleTemplates, query, category)}
+    ${content}
   </section>`;
 }
 
-function renderUploadModal(state) {
-  const templates = templatesFrom(state);
-  const selectedId = String(state.modalData?.templateId ?? state.templateDetails?.template?.id ?? "");
-  const uploading = isBusy(state, "upload-template", "upload-template-file");
-  const hasTemplates = templates.length > 0;
-  const fileName = state.modalData?.fileName || "Файл не выбран";
-  const formError = state.modalData?.error || "";
+function templateById(state, id) {
+  return templatesFrom(state).find((template) => Number(template.id) === Number(id));
+}
 
-  const body = `<form id="uploadTemplateForm" class="template-upload-form">
-    ${formError ? `<div class="template-modal-error" role="alert">${icon("alertCircle", 16)}<span>${escapeHtml(formError)}</span></div>` : ""}
-    <label class="field">
-      <span class="field__label">Форма документа</span>
-      <select class="select" name="template_id" required autofocus${hasTemplates ? "" : " disabled"}>
-        <option value="">Выберите существующий шаблон</option>
-        ${templates.map((template) => `<option value="${escapeHtml(template.id)}"${String(template.id) === selectedId ? " selected" : ""}>${escapeHtml(template.title || "Шаблон без названия")} · ${escapeHtml(docTypeLabel(template.doc_type))}</option>`).join("")}
-      </select>
-      <span class="field__helper">Файл привязывается к выбранной форме документа</span>
-    </label>
+function renderPreviewModal(state) {
+  const template = templateById(state, state.modalData?.templateId);
+  if (!template) return "";
+  const file = documentFileInfo(template);
+  return modal({
+    title: template.title || "Предпросмотр шаблона",
+    description: `${file.fileName} · версия ${template.version || 1}`,
+    body: `<div class="template-preview-modal">${renderFilePreview(template, { template: true })}</div>`,
+    footer: `${button({ label: "Закрыть", action: "close-modal", variant: "secondary" })}<a class="button button--primary" href="${templateDownloadUrl(template.id)}" download>${icon("download", 16)}<span class="button__label">Скачать оригинал</span></a>`,
+    size: "xl",
+    labelledBy: "templatePreviewModalTitle",
+  });
+}
 
-    <div class="template-replace-note" role="note">
-      ${icon("alertTriangle", 18)}
-      <span><strong>Файл заменит текущий DOCX выбранного шаблона.</strong><small>Версия формы увеличится, после загрузки откроется сопоставление маркеров.</small></span>
-    </div>
-
-    <label class="template-dropzone" for="templateFile">
-      <span class="template-dropzone__icon">${icon("upload", 24)}</span>
-      <span class="template-dropzone__copy"><strong>Выберите файл Word</strong><small>Только DOCX, до 25 МБ</small></span>
-      <input id="templateFile" class="template-file-control" name="file" type="file" accept=".docx" required aria-describedby="templateFileHelp">
-      <span id="templateFileHelp" class="template-dropzone__filename">${escapeHtml(fileName)}</span>
-    </label>
+function renderNewTemplateModal(state) {
+  const creating = isBusy(state, "create-template-file");
+  const draft = state.modalData || {};
+  const body = `<form id="newTemplateFileForm" class="template-modal-form" enctype="multipart/form-data">
+    ${draft.error ? `<div class="template-modal-error" role="alert">${icon("alertCircle", 16)}<span>${escapeHtml(draft.error)}</span></div>` : ""}
+    <label class="template-dropzone">${icon("upload", 26)}<span><strong>Готовый файл шаблона</strong><small>DOCX, XLSX или PDF до 25 МБ</small><em class="template-dropzone__filename">Файл не выбран</em></span><input name="file" type="file" required accept=".docx,.xlsx,.pdf"></label>
+    <div class="template-modal-grid"><label class="field template-modal-grid__wide"><span class="field__label">Название</span><input class="control" name="title" required value="${escapeHtml(draft.title || "")}" placeholder="Журнал общих работ"></label><label class="field"><span class="field__label">Тип</span><select class="select" name="doc_type">${Object.entries(DOC_TYPE_LABELS).map(([value, label]) => option(value, label, draft.doc_type || "aosr")).join("")}</select></label><label class="field"><span class="field__label">Раздел</span><select class="select" name="group_kind">${Object.entries(GROUP_LABELS).map(([value, label]) => option(value, label, draft.group_kind || "acts")).join("")}</select></label><label class="field template-modal-grid__wide"><span class="field__label">Заметка</span><textarea class="textarea" name="notes" rows="2" placeholder="Когда применять этот файл">${escapeHtml(draft.notes || "")}</textarea></label></div>
   </form>`;
-
-  return modal({
-    title: "Загрузить DOCX",
-    description: "Подключите файл Word к существующей форме документа.",
-    body,
-    footer: `${button({ label: "Отмена", action: "close-modal", variant: "secondary", disabled: uploading })}${button({
-      label: "Загрузить и проверить",
-      iconName: "upload",
-      variant: "primary",
-      type: "submit",
-      disabled: uploading || !hasTemplates,
-      attributes: `form="uploadTemplateForm" aria-busy="${uploading}"`,
-    })}`,
-    size: "md",
-    labelledBy: "uploadTemplateModalTitle",
-  });
+  return modal({ title: "Новый шаблон", description: "ID Vault сохранит файл как обычный оригинал без изменения содержимого.", body, footer: `${button({ label: "Отмена", action: "close-modal", variant: "secondary", disabled: creating })}${button({ label: "Добавить в библиотеку", action: "create-template-file", iconName: "upload", variant: "primary", type: "submit", disabled: creating, attributes: `form="newTemplateFileForm" aria-busy="${creating}"` })}`, size: "lg", labelledBy: "newTemplateModalTitle" });
 }
 
-function markerMappingLabel(mapping) {
-  if (typeof mapping === "string") return mapping || "Не сопоставлен";
-  if (!mapping || typeof mapping !== "object") return "Не сопоставлен";
-  if (mapping.field || mapping.source) return String(mapping.field || mapping.source);
-  if (Object.hasOwn(mapping, "value")) return "Фиксированное значение";
-  return "Не сопоставлен";
+function renderReplaceTemplateModal(state) {
+  const template = templateById(state, state.modalData?.templateId);
+  if (!template) return "";
+  const replacing = isBusy(state, "replace-template-file", template.id);
+  const body = `<form id="replaceTemplateFileForm" class="template-modal-form" enctype="multipart/form-data"><input type="hidden" name="template_id" value="${escapeHtml(template.id)}">${state.modalData?.error ? `<div class="template-modal-error" role="alert">${icon("alertCircle", 16)}<span>${escapeHtml(state.modalData.error)}</span></div>` : ""}<div class="replace-template-current"><span class="template-file-stamp mono">${escapeHtml(documentFileInfo(template).extension.toLocaleUpperCase("ru-RU") || "—")}</span><div><strong>${escapeHtml(template.title)}</strong><small>Текущая версия: ${escapeHtml(template.version || 1)}</small></div></div><label class="template-dropzone">${icon("refresh", 26)}<span><strong>Выберите новую версию</strong><small>DOCX, XLSX или PDF. Новый файл станет текущей версией шаблона.</small><em class="template-dropzone__filename">Файл не выбран</em></span><input name="file" type="file" required accept=".docx,.xlsx,.pdf"></label></form>`;
+  return modal({ title: "Заменить файл шаблона", description: "Метаданные и место в библиотеке сохранятся.", body, footer: `${button({ label: "Отмена", action: "close-modal", variant: "secondary", disabled: replacing })}${button({ label: "Сохранить новую версию", action: "replace-template-file", iconName: "refresh", variant: "primary", type: "submit", disabled: replacing, attributes: `form="replaceTemplateFileForm" aria-busy="${replacing}"` })}`, size: "lg", labelledBy: "replaceTemplateModalTitle" });
 }
 
-function humanizeLocation(value) {
-  const location = String(value || "");
-  const parts = [];
-  if (/header/i.test(location)) parts.push("Верхний колонтитул");
-  else if (/footer/i.test(location)) parts.push("Нижний колонтитул");
-  else if (/table/i.test(location)) parts.push(`Таблица ${numeric(location.match(/table\[(\d+)\]/i)?.[1]) + 1}`);
-  else parts.push("Текст документа");
-
-  const cell = location.match(/cell\[(\d+)\s*,\s*(\d+)\]/i);
-  if (cell) parts.push(`строка ${numeric(cell[1]) + 1}, столбец ${numeric(cell[2]) + 1}`);
-  const paragraphMatches = [...location.matchAll(/paragraph\[(\d+)\]/gi)];
-  const paragraph = paragraphMatches.at(-1)?.[1];
-  if (paragraph !== undefined) parts.push(`абзац ${numeric(paragraph) + 1}`);
-  return parts.join(" · ");
+function renderAddToObjectModal(state) {
+  const template = templateById(state, state.modalData?.templateId);
+  if (!template) return "";
+  const copying = isBusy(state, "copy-template-to-object", template.id);
+  const objects = (Array.isArray(state.objects) ? state.objects : []).filter((object) => object.status !== "archived");
+  const selectedObjectId = state.modalData?.objectId || state.workspace?.object?.id || objects[0]?.id || "";
+  const groups = Number(state.workspace?.object?.id) === Number(selectedObjectId) ? (state.workspace?.groups || []) : (state.templateTargetGroups || []);
+  const body = `<form id="addTemplateToObjectForm" class="template-modal-form"><input type="hidden" name="template_id" value="${escapeHtml(template.id)}">${state.modalData?.error ? `<div class="template-modal-error" role="alert">${icon("alertCircle", 16)}<span>${escapeHtml(state.modalData.error)}</span></div>` : ""}<div class="template-copy-source"><span class="template-file-stamp mono">${escapeHtml(documentFileInfo(template).extension.toLocaleUpperCase("ru-RU") || "—")}</span><div><span class="technical-eyebrow">Источник</span><strong>${escapeHtml(template.title)}</strong></div></div><div class="template-modal-grid"><label class="field template-modal-grid__wide"><span class="field__label">Объект</span><select class="select" name="object_id" required>${objects.map((object) => option(object.id, `${object.code || "Без кода"} · ${object.short_name || object.name}`, selectedObjectId)).join("")}</select></label><label class="field"><span class="field__label">Группа</span><select class="select" name="group_id">${option("", "Определить по типу", state.modalData?.groupId)}${groups.map((group) => option(group.id, group.title || "Группа", state.modalData?.groupId)).join("")}</select></label><label class="field"><span class="field__label">Номер</span><input class="control mono" name="number" value="${escapeHtml(state.modalData?.number || "")}" placeholder="Можно добавить позже"></label><label class="field template-modal-grid__wide"><span class="field__label">Название в объекте</span><input class="control" name="title" required value="${escapeHtml(state.modalData?.title || template.title || "")}"></label></div></form>`;
+  return modal({ title: "Добавить шаблон в объект", description: "Будет создана запись и независимая копия файла в архиве объекта.", body, footer: `${button({ label: "Отмена", action: "close-modal", variant: "secondary", disabled: copying })}${button({ label: "Добавить в объект", action: "copy-template-to-object", iconName: "copy", variant: "primary", type: "submit", disabled: copying || !objects.length, attributes: `form="addTemplateToObjectForm" aria-busy="${copying}"` })}`, size: "lg", labelledBy: "addTemplateToObjectModalTitle" });
 }
 
-function renderMarkerLocations(marker) {
-  const locations = Array.isArray(marker?.locations) ? marker.locations : [];
-  if (!locations.length) return "Расположение не определено";
-  const shown = locations.slice(0, 3).map(humanizeLocation);
-  if (locations.length > shown.length) shown.push(`ещё ${locations.length - shown.length}`);
-  return shown.join("; ");
-}
-
-function renderDetailsBody(state) {
-  const details = state.templateDetails;
-  if (!details || details.loading) return `<div class="template-details-loading">${skeleton("row", 5)}</div>`;
-  if (details.error) {
-    return `<div class="template-modal-feedback template-modal-feedback--error">${emptyState({
-      iconName: "alertCircle",
-      title: "Не удалось открыть шаблон",
-      description: details.error,
-      action: button({
-        label: "Повторить",
-        action: "retry-template-details",
-        iconName: "refresh",
-        variant: "secondary",
-        attributes: details.template?.id ? `data-template-id="${escapeHtml(details.template.id)}"` : "",
-      }),
-    })}</div>`;
-  }
-
-  const template = details.template || {};
-  const markers = Array.isArray(details.markers) ? details.markers : [];
-  const fields = Array.isArray(template.fields_json) ? template.fields_json : [];
-  return `<div class="template-details">
-    <section class="template-details__summary" aria-label="Сводка шаблона">
-      <div class="template-details__title">
-        <span class="template-details__icon">${icon("fileText", 20)}</span>
-        <span><strong>${escapeHtml(template.title || "Шаблон без названия")}</strong><small>${escapeHtml(docTypeLabel(template.doc_type))}</small></span>
-      </div>
-      ${templateStatusBadges(template)}
-      <dl>
-        <div><dt>Версия</dt><dd class="mono">v${escapeHtml(numeric(template.version, 1))}</dd></div>
-        <div><dt>Обновлён</dt><dd><time>${escapeHtml(formatTemplateDate(template))}</time></dd></div>
-        <div><dt>Полей формы</dt><dd class="tabular">${escapeHtml(fields.length)}</dd></div>
-        <div><dt>Маркеров DOCX</dt><dd class="tabular">${escapeHtml(markers.length)}</dd></div>
-      </dl>
-    </section>
-    <section class="template-marker-section">
-      <header><div><h3>Маркеры DOCX</h3><p>Где используются значения формы внутри документа.</p></div><span class="tabular">${escapeHtml(markers.length)}</span></header>
-      ${markers.length ? `<div class="template-marker-list">${markers.map((marker) => {
-        const occurrences = Math.max(0, numeric(marker.occurrences));
-        return `<article class="template-marker-item">
-          <div><code>${escapeHtml(marker.name || "Без имени")}</code><span>${escapeHtml(occurrences)} ${escapeHtml(plural(occurrences, "вхождение", "вхождения", "вхождений"))}</span></div>
-          <p>${escapeHtml(renderMarkerLocations(marker))}</p>
-          <span class="template-marker-item__mapping">${icon(marker.mapping ? "checkCircle" : "alertCircle", 14)}${escapeHtml(markerMappingLabel(marker.mapping))}</span>
-        </article>`;
-      }).join("")}</div>` : `<div class="template-marker-empty">${icon("info", 20)}<span><strong>Маркеры не найдены</strong><small>В DOCX нет конструкций для автоматической подстановки.</small></span></div>`}
-    </section>
-  </div>`;
-}
-
-function renderDetailsModal(state) {
-  const loading = !state.templateDetails || state.templateDetails.loading;
-  return modal({
-    title: "Карточка шаблона",
-    description: loading ? "Получаю сведения о форме и маркерах." : "Версия, поля и сопоставления DOCX.",
-    body: renderDetailsBody(state),
-    footer: button({ label: "Закрыть", action: "close-modal", variant: "secondary" }),
-    size: "lg",
-    labelledBy: "templateDetailsModalTitle",
-  });
-}
-
-function currentMarkerMapping(marker, markerMap) {
-  const mapping = markerMap?.[marker?.name] ?? marker?.mapping;
-  if (typeof mapping === "string") return mapping;
-  if (mapping && typeof mapping === "object") return String(mapping.field || mapping.source || "");
-  return "";
-}
-
-function mappingOptions(state, wizard, currentValue = "") {
-  const options = new Map(BUILTIN_MAPPINGS);
-  const templates = [...templatesFrom(state), wizard?.template].filter(Boolean);
-  templates.forEach((template) => {
-    const fields = Array.isArray(template.fields_json) ? template.fields_json : [];
-    fields.forEach((field) => {
-      const key = String(field?.key || "").trim();
-      const source = String(field?.source || "").trim();
-      const label = String(field?.label || key || source || "Поле документа");
-      if (key) options.set(key, `${label} — поле документа`);
-      if (source && !["manual", "default"].includes(source)) options.set(source, `${label} — данные объекта`);
-    });
-  });
-  if (currentValue && !options.has(currentValue)) options.set(currentValue, `Текущее сопоставление — ${currentValue}`);
-  return options;
-}
-
-function inferredMarkerMapping(marker, markerMap, options) {
-  const configured = currentMarkerMapping(marker, markerMap);
-  if (configured) return configured;
-  const name = String(marker?.name || "");
-  const alias = MARKER_ALIASES[name.toLocaleLowerCase("ru-RU")];
-  if (alias && options.has(alias)) return alias;
-  return [...options.keys()].find((value) => value.toLocaleLowerCase("ru-RU") === name.toLocaleLowerCase("ru-RU")) || "";
-}
-
-function renderMarkerMapRow(state, wizard, marker, markerMap, index) {
-  const initialOptions = mappingOptions(state, wizard, currentMarkerMapping(marker, markerMap));
-  const selected = inferredMarkerMapping(marker, markerMap, initialOptions);
-  const options = mappingOptions(state, wizard, selected);
-  const occurrences = Math.max(0, numeric(marker.occurrences));
-  const markerName = escapeHtml(marker.name || "");
-  const selectId = `markerMapping-${index}`;
-
-  return `<div class="marker-map-row" data-marker-name="${markerName}">
-    <div class="marker-map-row__marker">
-      <code>${escapeHtml(marker.name || "Без имени")}</code>
-      <span>${escapeHtml(occurrences)} ${escapeHtml(plural(occurrences, "вхождение", "вхождения", "вхождений"))}</span>
-      <small>${escapeHtml(renderMarkerLocations(marker))}</small>
-    </div>
-    <label class="field" for="${selectId}">
-      <span class="field__label">Источник значения</span>
-      <select id="${selectId}" class="select" name="mapping" data-marker-name="${markerName}"${index === 0 ? " autofocus" : ""}>
-        <option value="">Не сопоставлять</option>
-        ${[...options.entries()].map(([value, label]) => `<option value="${escapeHtml(value)}"${value === selected ? " selected" : ""}>${escapeHtml(label)}</option>`).join("")}
-      </select>
-      <span class="field__helper">Значение подставится при формировании документа</span>
-    </label>
-  </div>`;
-}
-
-function renderMarkerMapModal(state) {
-  const wizard = state.templateWizard || {};
-  const markers = Array.isArray(wizard.markers) ? wizard.markers : [];
-  const rawMap = wizard.marker_map?.markers || wizard.marker_map;
-  const markerMap = rawMap && typeof rawMap === "object" ? rawMap : {};
-  const saving = isBusy(state, "save-marker-map", "bind-template");
-  const wizardError = wizard.error || state.modalData?.error || "";
-  const body = `<form id="markerMapForm" class="marker-map-form">
-    ${wizardError ? `<div class="template-modal-error" role="alert">${icon("alertCircle", 16)}<span>${escapeHtml(wizardError)}</span></div>` : ""}
-    <div class="marker-map-intro">
-      <span>${icon("checkCircle", 18)}</span>
-      <div><strong>${escapeHtml(wizard.template?.title || "DOCX загружен")}</strong><p>${escapeHtml(markers.length)} ${escapeHtml(plural(markers.length, "маркер найден", "маркера найдено", "маркеров найдено"))}. Проверьте источник каждого значения.</p></div>
-    </div>
-    ${markers.length ? `<div class="marker-map-list">${markers.map((marker, index) => renderMarkerMapRow(state, wizard, marker, markerMap, index)).join("")}</div>` : `<div class="template-marker-empty">${icon("info", 20)}<span><strong>В файле нет маркеров</strong><small>Сохранение сопоставлений не требуется.</small></span></div>`}
-    <p class="marker-map-footnote">Маркеры без сопоставления останутся незаполненными и могут заблокировать формирование документа.</p>
-  </form>`;
-
-  return modal({
-    title: "Сопоставить маркеры",
-    description: "Свяжите поля DOCX с данными объекта и документа.",
-    body,
-    footer: `${button({ label: "Закрыть", action: "close-modal", variant: "secondary", disabled: saving })}${button({
-      label: "Сохранить сопоставления",
-      action: "save-marker-map",
-      iconName: "save",
-      variant: "primary",
-      type: "submit",
-      disabled: saving || !markers.length,
-      attributes: `form="markerMapForm" aria-busy="${saving}"`,
-    })}`,
-    size: "lg",
-    labelledBy: "markerMapModalTitle",
-  });
+function renderArchiveTemplateModal(state) {
+  const template = templateById(state, state.modalData?.templateId);
+  if (!template) return "";
+  const archiving = isBusy(state, "archive-template", template.id);
+  return modal({ title: "Убрать шаблон в архив?", description: "Он исчезнет из библиотеки, но связанные документы объектов сохранятся.", body: `<div class="archive-template-confirm"><span>${icon("archive", 22)}</span><div><strong>${escapeHtml(template.title)}</strong><small>Версия ${escapeHtml(template.version || 1)}</small></div></div>`, footer: `${button({ label: "Отмена", action: "close-modal", variant: "secondary", disabled: archiving })}${button({ label: "В архив", action: "confirm-archive-template", iconName: "archive", variant: "danger", disabled: archiving, attributes: `data-template-id="${escapeHtml(template.id)}" aria-busy="${archiving}"` })}`, size: "sm", labelledBy: "archiveTemplateModalTitle" });
 }
 
 export function renderTemplateModal(state) {
-  if (state.modal === "upload-template") return renderUploadModal(state);
-  if (state.modal === "template-details") return renderDetailsModal(state);
-  if (state.modal === "marker-map") return renderMarkerMapModal(state);
+  if (state.modal === "template-preview") return renderPreviewModal(state);
+  if (state.modal === "new-template") return renderNewTemplateModal(state);
+  if (state.modal === "replace-template") return renderReplaceTemplateModal(state);
+  if (state.modal === "add-template-to-object") return renderAddToObjectModal(state);
+  if (state.modal === "archive-template") return renderArchiveTemplateModal(state);
   return "";
 }

@@ -85,6 +85,9 @@ function queryString(params) {
 
 export const sourceUrl = (documentId) => `/api/source/${encodeURIComponent(documentId)}`;
 export const fileUrl = (documentId) => `/api/files/${encodeURIComponent(documentId)}`;
+export const previewUrl = (documentId) => `/api/preview/${encodeURIComponent(documentId)}`;
+export const templateFileUrl = (templateId) => `/api/templates/${encodeURIComponent(templateId)}/file`;
+export const templatePreviewUrl = (templateId) => `/api/templates/${encodeURIComponent(templateId)}/preview`;
 
 export const api = {
   state: () => request("/api/app-state", {}, "Не удалось загрузить состояние приложения"),
@@ -119,9 +122,25 @@ export const api = {
       { method: "PATCH", body: { completion_status: completionStatus } },
       "Не удалось изменить статус готовности документа",
     ),
+  uploadDocumentFile: (id, file) => {
+    const body = new FormData();
+    body.append("file", file);
+    return request(`/api/documents/${id}/file`, { method: "POST", body }, "Не удалось сохранить файл документа");
+  },
+  documentVersions: (id) =>
+    request(`/api/documents/${id}/versions`, {}, "Не удалось загрузить версии файла"),
   deleteDocument: (id) =>
     request(`/api/documents/${id}`, { method: "DELETE" }, "Не удалось удалить документ"),
   templates: () => request("/api/templates", {}, "Не удалось загрузить шаблоны"),
+  createTemplate: ({ file, title, docType, groupKind, notes }) => {
+    const body = new FormData();
+    body.append("file", file);
+    body.append("title", title);
+    body.append("doc_type", docType);
+    body.append("group_kind", groupKind);
+    if (notes) body.append("notes", notes);
+    return request("/api/templates", { method: "POST", body }, "Не удалось добавить шаблон");
+  },
   templateMarkers: (id) =>
     request(`/api/templates/${id}/markers`, {}, "Не удалось прочитать маркеры шаблона"),
   uploadTemplateFile: (id, file, markerMap = undefined) => {
@@ -132,6 +151,14 @@ export const api = {
     }
     return request(`/api/templates/${id}/file`, { method: "POST", body }, "Не удалось загрузить файл шаблона");
   },
+  updateTemplate: (id, payload) =>
+    request(`/api/templates/${id}`, { method: "PATCH", body: payload }, "Не удалось обновить шаблон"),
+  archiveTemplate: (id) =>
+    request(`/api/templates/${id}`, { method: "DELETE" }, "Не удалось архивировать шаблон"),
+  duplicateTemplate: (id, payload = {}) =>
+    request(`/api/templates/${id}/duplicate`, { method: "POST", body: payload }, "Не удалось дублировать шаблон"),
+  copyTemplate: (id, payload) =>
+    request(`/api/templates/${id}/copy`, { method: "POST", body: payload }, "Не удалось добавить шаблон в объект"),
   bindTemplate: (id, payload) =>
     request(`/api/templates/${id}/bind`, { method: "POST", body: payload }, "Не удалось привязать файл шаблона"),
   resolveTemplate: (templateId, objectId, presetId = null) =>
@@ -164,4 +191,7 @@ export const api = {
   corpusInsights: () => request("/api/corpus/insights", {}, "Не удалось загрузить сведения об источниках"),
   sourceUrl,
   fileUrl,
+  previewUrl,
+  templateFileUrl,
+  templatePreviewUrl,
 };

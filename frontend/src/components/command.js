@@ -18,22 +18,6 @@ const groups = [
     description: (item) => joinText(item.number, item.work_title),
     meta: (item) => firstText(item.document_date, "Документ"),
   },
-  {
-    key: "presets",
-    label: "Пресеты",
-    iconName: "templates",
-    title: (item) => firstText(item.title, "Пресет"),
-    description: (item) => firstText(item.description),
-    meta: () => "Пресет",
-  },
-  {
-    key: "catalogs",
-    label: "Материалы и каталог",
-    iconName: "layers",
-    title: (item) => firstText(item.title, item.code, "Материал"),
-    description: (item) => joinText(item.code, item.subtitle),
-    meta: () => "Материал",
-  },
 ];
 
 function firstText(...values) {
@@ -176,7 +160,7 @@ export function renderCommandPalette(state) {
   if (loading) {
     content = renderState({
       title: "Ищем в ID Vault",
-      description: "Объекты, документы, пресеты и материалы",
+      description: "Объекты и документы локального архива",
       loading: true,
     });
   } else if (error) {
@@ -220,7 +204,7 @@ export function renderCommandPalette(state) {
           ${activeDescendant ? `aria-activedescendant="${activeDescendant}"` : ""}
           autocomplete="off"
           spellcheck="false"
-          placeholder="Объект, документ, пресет или материал"
+          placeholder="Объект или документ"
           value="${escapeHtml(query)}"
           autofocus
         >

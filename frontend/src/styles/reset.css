@@ -54,7 +54,7 @@ svg {
 }
 
 :focus-visible {
-  border-color: var(--primary) !important;
+  border-color: var(--focus) !important;
   outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
@@ -81,11 +81,21 @@ svg {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  html:focus-within {
+    scroll-behavior: auto;
+  }
+
   *,
   *::before,
   *::after {
     scroll-behavior: auto !important;
     animation: none !important;
     transition: none !important;
+  }
+
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation-duration: 0.001ms !important;
   }
 }

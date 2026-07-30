@@ -58,6 +58,7 @@ class DocumentOut(ORMModel):
     source_kind: str
     source_file: str
     output_file: str | None
+    file_info: dict[str, Any] | None = None
 
 
 class DocumentCreate(BaseModel):
@@ -85,3 +86,23 @@ class DocumentPatch(BaseModel):
 class TemplateBind(BaseModel):
     template_file: str = Field(min_length=1)
     marker_map: dict[str, Any] | None = None
+
+
+class TemplatePatch(BaseModel):
+    title: str | None = None
+    doc_type: str | None = None
+    group_kind: str | None = None
+    notes: str | None = None
+    is_active: bool | None = None
+
+
+class TemplateCopy(BaseModel):
+    object_id: int
+    group_id: int | None = None
+    title: str | None = None
+    number: str | None = None
+
+
+class TemplateDuplicate(BaseModel):
+    title: str | None = None
+    notes: str | None = None

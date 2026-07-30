@@ -1,10 +1,24 @@
-import "@fontsource-variable/manrope";
+import "@fontsource/ibm-plex-sans/cyrillic-400.css";
+import "@fontsource/ibm-plex-sans/cyrillic-500.css";
+import "@fontsource/ibm-plex-sans/cyrillic-600.css";
+import "@fontsource/ibm-plex-sans/latin-400.css";
+import "@fontsource/ibm-plex-sans/latin-500.css";
+import "@fontsource/ibm-plex-sans/latin-600.css";
+import "@fontsource/ibm-plex-sans-condensed/cyrillic-ext-600.css";
+import "@fontsource/ibm-plex-sans-condensed/latin-600.css";
+import "@fontsource/ibm-plex-mono/cyrillic-400.css";
+import "@fontsource/ibm-plex-mono/cyrillic-500.css";
+import "@fontsource/ibm-plex-mono/cyrillic-600.css";
+import "@fontsource/ibm-plex-mono/latin-400.css";
+import "@fontsource/ibm-plex-mono/latin-500.css";
+import "@fontsource/ibm-plex-mono/latin-600.css";
 import "./styles/tokens.css";
 import "./styles/theme-dark.css";
 import "./styles/reset.css";
 import "./styles/typography.css";
 import "./styles/layout.css";
 import "./styles/components.css";
+import "./styles/file-preview.css";
 import "./styles/command.css";
 import "./styles/table.css";
 import "./styles/views/objects.css";
@@ -13,8 +27,11 @@ import "./styles/views/editor.css";
 import "./styles/views/templates.css";
 import "./styles/utilities.css";
 
+import autoAnimate from "@formkit/auto-animate";
+import { Idiomorph } from "idiomorph";
 import { api } from "./api.js";
 import { renderCommandPalette } from "./components/command.js";
+import { documentFileInfo, hydrateFilePreviews } from "./components/file-preview.js";
 import { icon } from "./components/icons.js";
 import { shell } from "./components/shell.js";
 import { button, emptyState, escapeHtml, modal, skeleton, toastView } from "./components/ui.js";
@@ -37,8 +54,20 @@ let overlayReturnPosition = null;
 let commandSearchTimer = null;
 let commandSearchSequence = 0;
 let workspaceNavigationSequence = 0;
+let routeWorkspaceRecovery = null;
+let renderedRoute = null;
+const dragDepth = new WeakMap();
 
-const commandGroupOrder = ["objects", "documents", "presets", "catalogs"];
+const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+const autoAnimatedContainers = new WeakSet();
+const autoAnimateTargets = [
+  ["objects", '.objects-grid'],
+  ["documents", '.registry-content tbody'],
+  ["templates", '.templates-grid'],
+  ["integrity", '.integrity-list'],
+];
+
+const commandGroupOrder = ["objects", "documents"];
 
 function applyTheme() {
   const theme = state.theme === "dark" ? "dark" : "light";
@@ -142,8 +171,22 @@ function renderToast() {
   toastHost.innerHTML = toastView(state.toast);
 }
 
-function render() {
-  renderQueued = false;
+function initAutoAnimate() {
+  if (reducedMotion.matches) return;
+  const targets = new Map();
+  root.querySelectorAll("[data-auto-animate]").forEach((element) => targets.set(element, element.dataset.autoAnimate || "list"));
+  autoAnimateTargets.forEach(([name, selector]) => {
+    root.querySelectorAll(selector).forEach((element) => targets.set(element, name));
+  });
+  targets.forEach((name, element) => {
+    if (!element.dataset.autoAnimate) element.dataset.autoAnimate = name;
+    if (autoAnimatedContainers.has(element)) return;
+    autoAnimate(element, { duration: 160, easing: "ease-out" });
+    autoAnimatedContainers.add(element);
+  });
+}
+
+function renderInner() {
   const position = captureUiPosition();
   const nextOverlayKey = state.commandOpen ? "command" : state.modal ? `modal:${state.modal}` : "";
   const openingOverlay = !activeOverlayKey && Boolean(nextOverlayKey);
@@ -151,9 +194,17 @@ function render() {
   const switchingOverlay = Boolean(activeOverlayKey) && Boolean(nextOverlayKey) && activeOverlayKey !== nextOverlayKey;
   if (openingOverlay) overlayReturnPosition = position;
   applyTheme();
-  root.innerHTML = shell(state, routeView()) + modalView() + renderCommandPalette(state);
+  const nextHtml = shell(state, routeView()) + modalView() + renderCommandPalette(state);
+  Idiomorph.morph(root, nextHtml, {
+    morphStyle: "innerHTML",
+    ignoreActiveValue: true,
+    restoreFocus: true,
+  });
+  initAutoAnimate();
+  hydrateFilePreviews(root);
   renderToast();
   activeOverlayKey = nextOverlayKey;
+  renderedRoute = state.route;
   requestAnimationFrame(() => {
     if (nextOverlayKey) {
       if (openingOverlay || switchingOverlay) focusActiveOverlay();
@@ -167,6 +218,16 @@ function render() {
     }
     restoreUiPosition(position);
   });
+}
+
+function render() {
+  renderQueued = false;
+  const routeChanged = renderedRoute !== null && renderedRoute !== state.route;
+  if (routeChanged && !reducedMotion.matches && typeof document.startViewTransition === "function") {
+    document.startViewTransition(renderInner);
+    return;
+  }
+  renderInner();
 }
 
 subscribe((key) => {
@@ -324,25 +385,7 @@ async function openCommandSelection(index = state.commandIndex) {
     if (opened && state.workspace?.object?.id === objectId) openDocumentEditor(documentId);
     return;
   }
-  if (group === "presets") {
-    if (!confirmEditorNavigation("Есть несохранённые изменения. Новый документ откроется в редакторе, а текущие правки будут потеряны. Продолжить?")) return;
-    closeCommandPalette();
-    if (!["object", "editor"].includes(state.route) || !state.workspace?.object || state.workspace.object.status === "archived") {
-      navigate("objects");
-      notify("Сначала откройте объект для нового документа", "warning");
-      return;
-    }
-    state.modalData = {
-      group_id: state.selectedGroupId === "all" ? null : state.selectedGroupId,
-      preset_id: Number(item.id) || null,
-    };
-    state.modal = "new-document";
-    return;
-  }
   closeCommandPalette();
-  const label = String(item.title || item.code || "Материал из каталога");
-  const detail = String(item.subtitle || "").trim();
-  notify(detail ? `${label} — ${detail}` : label);
 }
 
 function confirmEditorNavigation(message = "Есть несохранённые изменения. Перейти без сохранения?") {
@@ -495,30 +538,15 @@ async function loadEditorDocument(document) {
   state.error = null;
   state.selectedDocument = document;
   state.requestedDocumentId = document.id;
-  state.editorDraft = newEditorDraft(document);
+  state.previewDocumentId = null;
+  state.fileVersions = [];
+  state.fileVersionsDocumentId = null;
+  state.fileVersionsOpen = false;
+  state.editorDraft = null;
   state.editorResolved = null;
   state.editorMarkers = null;
   state.editorIssues = [];
   state.editorDirty = false;
-
-  if (document.source_kind !== "imported" && document.template_id) {
-    const objectId = document.object_id || state.workspace?.object?.id;
-    const [resolvedResult, markersResult] = await Promise.allSettled([
-      api.resolveTemplate(document.template_id, objectId),
-      api.templateMarkers(document.template_id),
-    ]);
-    const template = state.templates.find((item) => item.id === document.template_id);
-    state.editorResolved = resolvedResult.status === "fulfilled"
-      ? resolvedResult.value
-      : { fields: template?.fields_json || [], values: {} };
-    state.editorMarkers = markersResult.status === "fulfilled" ? markersResult.value : { markers: [] };
-    if (resolvedResult.status === "rejected") state.error = resolvedResult.reason.message;
-  } else {
-    state.editorResolved = { fields: [], values: {} };
-    state.editorMarkers = { markers: [] };
-  }
-
-  state.editorIssues = buildEditorIssues(document, state.editorDraft, state.editorResolved);
   state.loading = false;
 }
 
@@ -548,6 +576,94 @@ function openDocumentEditor(documentId) {
   state.requestedDocumentId = document.id;
   navigate("editor", { document });
   loadEditorDocument(document);
+}
+
+function openDocumentPreview(documentId) {
+  const document = state.documents.find((item) => Number(item.id) === Number(documentId));
+  if (!document) {
+    notify("Документ не найден в текущем объекте", "error");
+    return;
+  }
+  state.selectedDocument = document;
+  state.previewDocumentId = document.id;
+  state.fileVersions = [];
+  state.fileVersionsDocumentId = null;
+  state.fileVersionsOpen = false;
+}
+
+function closeDocumentPreview() {
+  state.previewDocumentId = null;
+  if (state.route === "object") state.selectedDocument = null;
+}
+
+async function uploadDocumentFile(documentId, file) {
+  const document = state.documents.find((item) => Number(item.id) === Number(documentId))
+    || (Number(state.selectedDocument?.id) === Number(documentId) ? state.selectedDocument : null);
+  if (!document || !file || state.busyAction) return;
+  if (file.size > 100 * 1024 * 1024) {
+    notify("Файл больше 100 МБ", "error");
+    return;
+  }
+  const replacing = Boolean(document.file_info?.file_name || document.source_file || document.output_file);
+  state.busyAction = `upload-document-file-${document.id}`;
+  state.uploadProgress = { documentId: document.id, fileName: file.name };
+  try {
+    await api.uploadDocumentFile(document.id, file);
+    await Promise.all([refreshWorkspace(document.object_id), refreshObjects()]);
+    const updated = state.documents.find((item) => Number(item.id) === Number(document.id));
+    if (updated) state.selectedDocument = updated;
+    if (state.fileVersionsOpen) {
+      state.fileVersionsDocumentId = null;
+      await loadFileVersions(document.id, true);
+    }
+    notify(replacing ? "Файл заменён, прежняя версия сохранена" : "Файл добавлен в архив");
+  } catch (error) {
+    notify(error.message, "error");
+  } finally {
+    state.uploadProgress = null;
+    state.busyAction = null;
+  }
+}
+
+async function loadFileVersions(documentId, keepOpen = false) {
+  if (!documentId || (state.busyAction && !String(state.busyAction).startsWith("upload-document-file"))) return;
+  const previousBusy = state.busyAction;
+  state.fileVersionsOpen = true;
+  state.busyAction = `load-file-versions-${documentId}`;
+  try {
+    const result = await api.documentVersions(documentId);
+    const current = result.current?.file_name
+      ? [{
+        ...result.current,
+        id: "current",
+        name: result.current.file_name,
+        size: result.current.file_size,
+        created_at: result.current.updated_at,
+        download_url: result.current.download_url || api.previewUrl(documentId),
+        current: true,
+      }]
+      : [];
+    state.fileVersions = [...current, ...(Array.isArray(result.versions) ? result.versions : [])];
+    state.fileVersionsDocumentId = Number(documentId);
+    state.fileVersionsOpen = true;
+  } catch (error) {
+    notify(error.message, "error");
+    if (!keepOpen) state.fileVersionsOpen = false;
+  } finally {
+    state.busyAction = previousBusy && String(previousBusy).startsWith("upload-document-file") ? previousBusy : null;
+  }
+}
+
+function toggleFileVersions(documentId) {
+  if (state.fileVersionsOpen) {
+    state.fileVersionsOpen = false;
+    return;
+  }
+  if (state.fileVersionsDocumentId === Number(documentId)) {
+    state.fileVersionsOpen = true;
+    return;
+  }
+  loadFileVersions(documentId);
 }
 
 async function openObjectFolder(objectId) {
@@ -776,19 +892,22 @@ async function generateEditorDocument() {
 }
 
 async function changeDocumentCompletion(select) {
-  const document = state.selectedDocument;
+  const documentId = Number(select.dataset.document || state.selectedDocument?.id);
+  const document = state.documents.find((item) => Number(item.id) === documentId)
+    || (Number(state.selectedDocument?.id) === documentId ? state.selectedDocument : null);
   if (!document || state.busyAction) return;
   const previous = document.completion_status || "not_started";
   state.busyAction = `change-completion-${document.id}`;
   try {
     await api.updateCompletion(document.id, select.value);
     await Promise.all([refreshWorkspace(document.object_id), refreshObjects()]);
+    state.selectedDocument = state.documents.find((item) => Number(item.id) === Number(document.id)) || state.selectedDocument;
     notify("Статус документа обновлён");
   } catch (error) {
     if (error.missingFields?.length) {
       state.editorIssues = error.missingFields.map((key) => ({ key, label: key, message: "Обязательное поле не заполнено", tone: "error" }));
     }
-    const current = root.querySelector('[data-action="change-completion"]');
+    const current = root.querySelector(`[data-action="change-completion"][data-document="${CSS.escape(String(document.id))}"]`);
     if (current) current.value = previous;
     notify(error.message, "error");
   } finally {
@@ -804,6 +923,10 @@ async function deleteSelectedDocument(documentId) {
     await api.deleteDocument(document.id);
     await Promise.all([refreshWorkspace(document.object_id), refreshObjects()]);
     state.selectedDocument = null;
+    state.previewDocumentId = null;
+    state.fileVersions = [];
+    state.fileVersionsDocumentId = null;
+    state.fileVersionsOpen = false;
     state.requestedDocumentId = null;
     state.editorDraft = null;
     state.editorResolved = null;
@@ -838,6 +961,8 @@ async function openObjectWorkspace(objectId) {
     applyWorkspace(workspace, objectId);
     state.selectedGroupId = "all";
     state.objectTab = "registry";
+    state.previewDocumentId = null;
+    state.selectedDocument = null;
     navigate("object");
     return true;
   } catch (error) {
@@ -887,11 +1012,42 @@ async function archiveObject(objectId) {
   }
 }
 
+async function duplicateTemplate(templateId) {
+  if (!templateId || state.busyAction) return;
+  state.busyAction = `duplicate-template-${templateId}`;
+  try {
+    await api.duplicateTemplate(templateId);
+    await refreshTemplates();
+    notify("Копия шаблона добавлена");
+  } catch (error) {
+    notify(error.message, "error");
+  } finally {
+    state.busyAction = null;
+  }
+}
+
+async function confirmArchiveTemplate(templateId) {
+  if (!templateId || state.busyAction) return;
+  state.busyAction = `archive-template-${templateId}`;
+  try {
+    await api.archiveTemplate(templateId);
+    await refreshTemplates();
+    state.modal = null;
+    state.modalData = null;
+    notify("Шаблон перемещён в архив");
+  } catch (error) {
+    notify(error.message, "error");
+  } finally {
+    state.busyAction = null;
+  }
+}
+
 root.addEventListener("click", (event) => {
   const routeTarget = event.target.closest("[data-route]");
   if (routeTarget) {
     event.preventDefault();
     if (routeTarget.dataset.route !== state.route && !confirmEditorNavigation()) return;
+    state.previewDocumentId = null;
     navigate(routeTarget.dataset.route);
     return;
   }
@@ -908,13 +1064,29 @@ root.addEventListener("click", (event) => {
     } else if (action === "toggle-theme") {
       state.theme = state.theme === "dark" ? "light" : "dark";
       localStorage.setItem("idv-theme", state.theme);
-    } else if (action === "upload-template") {
-      state.templateWizard = null;
-      const templateId = Number(actionTarget.dataset.templateId) || "";
+    } else if (action === "new-template") {
+      state.modalData = null;
+      state.modal = "new-template";
+    } else if (action === "preview-template") {
+      state.modalData = { templateId: Number(actionTarget.dataset.templateId) };
+      state.modal = "template-preview";
+    } else if (action === "replace-template") {
+      state.modalData = { templateId: Number(actionTarget.dataset.templateId) };
+      state.modal = "replace-template";
+    } else if (action === "add-template-to-object") {
       state.modalData = {
-        templateId,
+        templateId: Number(actionTarget.dataset.templateId),
+        objectId: state.workspace?.object?.id || state.objects.find((object) => object.status !== "archived")?.id || null,
       };
-      state.modal = "upload-template";
+      state.templateTargetGroups = state.workspace?.groups || [];
+      state.modal = "add-template-to-object";
+    } else if (action === "duplicate-template") {
+      duplicateTemplate(Number(actionTarget.dataset.templateId));
+    } else if (action === "archive-template") {
+      state.modalData = { templateId: Number(actionTarget.dataset.templateId) };
+      state.modal = "archive-template";
+    } else if (action === "confirm-archive-template") {
+      confirmArchiveTemplate(Number(actionTarget.dataset.templateId));
     } else if (action === "filter-templates") {
       state.templateCategory = actionTarget.dataset.templateCategory || "all";
     } else if (action === "clear-template-filters") {
@@ -964,17 +1136,40 @@ root.addEventListener("click", (event) => {
       state.objectTab = actionTarget.dataset.objectTab === "integrity" ? "integrity" : "registry";
     } else if (action === "select-group") {
       state.selectedGroupId = actionTarget.dataset.group === "all" ? "all" : Number(actionTarget.dataset.group);
+    } else if (action === "set-completeness-filter") {
+      state.completionFilter = actionTarget.dataset.filter || "all";
     } else if (action === "clear-document-filters") {
       state.selectedGroupId = "all";
       state.completionFilter = "all";
       state.documentQuery = "";
       requestAnimationFrame(() => document.getElementById("documentSearch")?.focus());
     } else if (action === "open-document") {
+      openDocumentPreview(Number(actionTarget.dataset.documentId));
+    } else if (action === "open-document-full") {
       openDocumentEditor(Number(actionTarget.dataset.documentId));
+    } else if (action === "close-document-preview") {
+      closeDocumentPreview();
+    } else if (action === "toggle-file-versions") {
+      toggleFileVersions(Number(actionTarget.dataset.documentId));
+    } else if (action === "toggle-preview-zoom") {
+      const preview = actionTarget.closest(".file-preview--image");
+      preview?.classList.toggle("is-zoomed");
+      actionTarget.setAttribute("aria-label", preview?.classList.contains("is-zoomed") ? "Уменьшить изображение" : "Увеличить изображение");
     } else if (action === "open-source-document") {
       window.open(api.sourceUrl(Number(actionTarget.dataset.documentId)), "_blank", "noopener,noreferrer");
     } else if (action === "download-document") {
       window.open(api.fileUrl(Number(actionTarget.dataset.documentId)), "_blank", "noopener,noreferrer");
+    } else if (action === "download-source-document") {
+      const documentId = Number(actionTarget.dataset.documentId);
+      const sourceDocument = state.documents.find((item) => Number(item.id) === documentId);
+      const file = sourceDocument ? documentFileInfo(sourceDocument) : null;
+      const anchor = document.createElement("a");
+      anchor.href = sourceDocument?.file_info?.download_url || api.previewUrl(documentId);
+      anchor.download = file?.fileName || "";
+      anchor.hidden = true;
+      document.body.append(anchor);
+      anchor.click();
+      anchor.remove();
     } else if (action === "delete-document") {
       const documentId = Number(actionTarget.dataset.documentId || actionTarget.dataset.document);
       const document = state.documents.find((item) => item.id === documentId) || (state.selectedDocument?.id === documentId ? state.selectedDocument : null);
@@ -1027,6 +1222,11 @@ root.addEventListener("click", (event) => {
   const objectTarget = event.target.closest("[data-open-object]");
   if (objectTarget && !event.target.closest("[data-action]")) {
     openObjectWorkspace(Number(objectTarget.dataset.openObject));
+    return;
+  }
+  const documentTarget = event.target.closest("[data-document]");
+  if (documentTarget && !event.target.closest("[data-action]")) {
+    openDocumentPreview(Number(documentTarget.dataset.document));
   }
 });
 
@@ -1038,13 +1238,20 @@ root.addEventListener("input", (event) => {
   if (event.target.matches("#objectSearch")) state.objectQuery = event.target.value;
   if (event.target.matches("#documentSearch")) state.documentQuery = event.target.value;
   if (event.target.matches("#templateSearch")) state.templateQuery = event.target.value;
-  if (event.target.closest("#documentForm")) markEditorDirty(event.target);
   if (event.target.matches('#importDocumentForm input[type="file"]')) {
-    const file = event.target.files?.[0];
+    const files = [...(event.target.files || [])];
     const label = event.target.closest(".object-file-field")?.querySelector("strong");
-    if (label) label.textContent = file?.name || "Выберите файл";
+    if (label) label.textContent = files.length ? `${files.length} ${files.length === 1 ? "файл" : "файла"}` : "Выберите один или несколько файлов";
+    const list = event.target.form?.querySelector("[data-import-file-list]");
+    if (list) {
+      list.replaceChildren(...files.map((file) => {
+        const row = document.createElement("span");
+        row.textContent = `${file.name} · ${Math.max(1, Math.round(file.size / 1024))} КБ`;
+        return row;
+      }));
+    }
   }
-  if (event.target.matches('#uploadTemplateForm input[type="file"]')) {
+  if (event.target.matches('#newTemplateFileForm input[type="file"], #replaceTemplateFileForm input[type="file"]')) {
     const file = event.target.files?.[0];
     const label = event.target.closest(".template-dropzone")?.querySelector(".template-dropzone__filename");
     if (label) label.textContent = file?.name || "Файл не выбран";
@@ -1052,6 +1259,11 @@ root.addEventListener("input", (event) => {
 });
 
 root.addEventListener("change", (event) => {
+  if (event.target.matches("[data-document-file-input]")) {
+    const file = event.target.files?.[0];
+    if (file) uploadDocumentFile(Number(event.target.dataset.documentId), file);
+    return;
+  }
   if (event.target.matches('[data-action="change-completion"]')) {
     changeDocumentCompletion(event.target);
     return;
@@ -1059,10 +1271,19 @@ root.addEventListener("change", (event) => {
   if (event.target.matches("#completionFilter")) {
     state.completionFilter = event.target.value || "all";
   }
-  if (event.target.matches('#newDocumentForm [name="template_id"]')) {
-    const title = event.target.form?.elements.title;
-    const template = state.templates.find((item) => item.id === Number(event.target.value));
-    if (title && template && !title.value.trim()) title.value = template.title || "";
+  if (event.target.matches('#addTemplateToObjectForm [name="object_id"]')) {
+    const objectId = Number(event.target.value);
+    const formData = new FormData(event.target.form);
+    state.modalData = {
+      ...state.modalData,
+      objectId,
+      title: String(formData.get("title") || ""),
+      number: String(formData.get("number") || ""),
+    };
+    state.templateTargetGroups = [];
+    api.workspace(objectId).then((workspace) => {
+      if (Number(state.modalData?.objectId) === objectId) state.templateTargetGroups = workspace.groups || [];
+    }).catch((error) => notify(error.message, "error"));
   }
 });
 
@@ -1071,6 +1292,46 @@ root.addEventListener("dblclick", (event) => {
   if (documentRow && !event.target.closest("[data-action]")) {
     openDocumentEditor(Number(documentRow.dataset.document));
   }
+});
+
+root.addEventListener("dragenter", (event) => {
+  const zone = event.target.closest("[data-object-drop], [data-file-drop]");
+  if (!zone || !event.dataTransfer?.types?.includes("Files")) return;
+  event.preventDefault();
+  dragDepth.set(zone, (dragDepth.get(zone) || 0) + 1);
+  zone.classList.add("is-dragover");
+});
+
+root.addEventListener("dragover", (event) => {
+  const zone = event.target.closest("[data-object-drop], [data-file-drop]");
+  if (!zone || !event.dataTransfer?.types?.includes("Files")) return;
+  event.preventDefault();
+  event.dataTransfer.dropEffect = "copy";
+});
+
+root.addEventListener("dragleave", (event) => {
+  const zone = event.target.closest("[data-object-drop], [data-file-drop]");
+  if (!zone) return;
+  const depth = Math.max(0, (dragDepth.get(zone) || 1) - 1);
+  dragDepth.set(zone, depth);
+  if (!depth) zone.classList.remove("is-dragover");
+});
+
+root.addEventListener("drop", (event) => {
+  const zone = event.target.closest("[data-object-drop], [data-file-drop]");
+  if (!zone) return;
+  event.preventDefault();
+  dragDepth.set(zone, 0);
+  zone.classList.remove("is-dragover");
+  const files = [...(event.dataTransfer?.files || [])];
+  if (!files.length) return;
+  if (zone.matches("[data-file-drop]")) {
+    if (files.length > 1) notify("Для замены используется первый файл", "warning");
+    uploadDocumentFile(Number(zone.dataset.documentId), files[0]);
+    return;
+  }
+  const groupId = state.selectedGroupId === "all" ? null : Number(state.selectedGroupId);
+  importDroppedFiles(files, groupId);
 });
 
 async function runFormAction(form, operation) {
@@ -1178,18 +1439,54 @@ async function createGroupFromForm(form) {
 async function importDocumentFromForm(form) {
   const objectId = state.workspace?.object?.id;
   const formData = new FormData(form);
-  const file = formData.get("file");
-  if (!objectId || !(file instanceof File) || !file.name) {
-    notify("Выберите файл для импорта", "error");
+  const files = formData.getAll("files").filter((file) => file instanceof File && file.name);
+  if (!objectId || !files.length) {
+    notify("Выберите хотя бы один файл", "error");
     return;
   }
   await runFormAction(form, async () => {
-    await api.importFile(objectId, file, optionalNumber(formData.get("group_id")));
+    let imported = 0;
+    const failed = [];
+    for (const file of files) {
+      try {
+        await api.importFile(objectId, file, optionalNumber(formData.get("group_id")));
+        imported += 1;
+      } catch (error) {
+        failed.push(`${file.name}: ${error.message}`);
+      }
+    }
     await Promise.all([refreshWorkspace(objectId), refreshObjects()]);
-    state.modal = null;
-    state.modalData = null;
-    notify("Документ импортирован");
+    if (imported) {
+      state.modal = null;
+      state.modalData = null;
+      notify(imported === 1 ? "Файл добавлен в архив" : `Добавлено файлов: ${imported}`, failed.length ? "warning" : "success");
+    }
+    if (failed.length) throw new Error(`Не добавлено файлов: ${failed.length}. ${failed[0]}`);
   });
+}
+
+async function importDroppedFiles(files, groupId = null) {
+  const objectId = state.workspace?.object?.id;
+  const accepted = [...files].filter((file) => file instanceof File && file.name);
+  if (!objectId || !accepted.length || state.busyAction) return;
+  state.busyAction = "import-document-file";
+  let imported = 0;
+  const failed = [];
+  try {
+    for (const file of accepted) {
+      try {
+        await api.importFile(objectId, file, groupId);
+        imported += 1;
+      } catch (error) {
+        failed.push(`${file.name}: ${error.message}`);
+      }
+    }
+    await Promise.all([refreshWorkspace(objectId), refreshObjects()]);
+    if (imported) notify(imported === 1 ? "Файл добавлен в архив" : `Добавлено файлов: ${imported}`, failed.length ? "warning" : "success");
+    if (failed.length) notify(`Не добавлено файлов: ${failed.length}. ${failed[0]}`, "error");
+  } finally {
+    state.busyAction = null;
+  }
 }
 
 async function waiveRuleFromForm(form) {
@@ -1224,11 +1521,10 @@ async function createDocumentFromForm(form) {
   if (!objectId) return;
   const payload = {
     object_id: objectId,
-    template_id: optionalNumber(formData.get("template_id")),
-    preset_id: optionalNumber(formData.get("preset_id")),
     group_id: optionalNumber(formData.get("group_id")),
     number: String(formData.get("number") || "").trim() || null,
     title: String(formData.get("title") || "").trim(),
+    doc_type: String(formData.get("doc_type") || "aosr"),
     work_title: String(formData.get("work_title") || "").trim(),
     document_date: String(formData.get("document_date") || "").trim(),
   };
@@ -1237,8 +1533,82 @@ async function createDocumentFromForm(form) {
     await Promise.all([refreshWorkspace(objectId), refreshObjects()]);
     state.modal = null;
     state.modalData = null;
-    notify("Черновик документа создан");
-    openDocumentEditor(created.id);
+    notify("Ожидаемый документ добавлен в реестр");
+    openDocumentPreview(created.id);
+  });
+}
+
+function validTemplateFile(file) {
+  if (!(file instanceof File) || !file.name) return "Выберите файл шаблона";
+  if (!/\.(docx|xlsx|pdf)$/i.test(file.name)) return "Поддерживаются DOCX, XLSX и PDF";
+  if (file.size > 25 * 1024 * 1024) return "Файл шаблона больше 25 МБ";
+  return "";
+}
+
+async function createTemplateFromForm(form) {
+  const formData = new FormData(form);
+  const file = formData.get("file");
+  const validation = validTemplateFile(file);
+  if (validation) {
+    notify(validation, "error");
+    form.elements.file?.focus();
+    return;
+  }
+  await runFormAction(form, async () => {
+    await api.createTemplate({
+      file,
+      title: String(formData.get("title") || "").trim(),
+      docType: String(formData.get("doc_type") || "other"),
+      groupKind: String(formData.get("group_kind") || "other"),
+      notes: String(formData.get("notes") || "").trim(),
+    });
+    await refreshTemplates();
+    state.modal = null;
+    state.modalData = null;
+    notify("Шаблон добавлен в библиотеку");
+  });
+}
+
+async function replaceTemplateFromForm(form) {
+  const formData = new FormData(form);
+  const templateId = optionalNumber(formData.get("template_id"));
+  const file = formData.get("file");
+  const validation = validTemplateFile(file);
+  if (!templateId || validation) {
+    notify(validation || "Шаблон не найден", "error");
+    if (validation) form.elements.file?.focus();
+    return;
+  }
+  await runFormAction(form, async () => {
+    await api.uploadTemplateFile(templateId, file);
+    await refreshTemplates();
+    state.modal = null;
+    state.modalData = null;
+    notify("Новая версия шаблона сохранена");
+  });
+}
+
+async function copyTemplateToObjectFromForm(form) {
+  const formData = new FormData(form);
+  const templateId = optionalNumber(formData.get("template_id"));
+  const objectId = optionalNumber(formData.get("object_id"));
+  if (!templateId || !objectId) {
+    notify("Выберите объект", "error");
+    return;
+  }
+  await runFormAction(form, async () => {
+    const created = await api.copyTemplate(templateId, {
+      object_id: objectId,
+      group_id: optionalNumber(formData.get("group_id")),
+      title: String(formData.get("title") || "").trim() || null,
+      number: String(formData.get("number") || "").trim() || null,
+    });
+    if (Number(state.workspace?.object?.id) === objectId) await refreshWorkspace(objectId);
+    await refreshObjects();
+    state.modal = null;
+    state.modalData = null;
+    notify("Шаблон скопирован в объект");
+    if (Number(state.workspace?.object?.id) === objectId && state.route === "object") openDocumentPreview(created.id);
   });
 }
 
@@ -1348,6 +1718,9 @@ root.addEventListener("submit", (event) => {
     importDocumentForm: importDocumentFromForm,
     waiveRuleForm: waiveRuleFromForm,
     newDocumentForm: createDocumentFromForm,
+    newTemplateFileForm: createTemplateFromForm,
+    replaceTemplateFileForm: replaceTemplateFromForm,
+    addTemplateToObjectForm: copyTemplateToObjectFromForm,
     uploadTemplateForm: uploadTemplateFromForm,
     markerMapForm: saveMarkerMapFromForm,
   };
@@ -1367,7 +1740,7 @@ root.addEventListener("keydown", (event) => {
   const documentRow = event.target.closest("[data-document]");
   if (documentRow && !event.target.closest("[data-action]") && (event.key === "Enter" || event.key === " ")) {
     event.preventDefault();
-    openDocumentEditor(Number(documentRow.dataset.document));
+    openDocumentPreview(Number(documentRow.dataset.document));
   }
 });
 
@@ -1378,19 +1751,17 @@ toastHost.addEventListener("click", (event) => {
 async function loadApplication() {
   state.loading = true;
   state.error = null;
-  const [appResult, objectsResult, templatesResult, presetsResult] = await Promise.allSettled([
+  const [appResult, objectsResult, templatesResult] = await Promise.allSettled([
     api.state(),
     api.objectSummaries(),
     api.templates(),
-    api.presets(),
   ]);
 
   state.app = appResult.status === "fulfilled" ? appResult.value : null;
   state.objects = objectsResult.status === "fulfilled" ? objectsResult.value : [];
   state.templates = templatesResult.status === "fulfilled" ? templatesResult.value : [];
   state.templateError = templatesResult.status === "rejected" ? templatesResult.reason.message : null;
-  state.presets = presetsResult.status === "fulfilled" ? presetsResult.value : [];
-  state.backendOnline = [appResult, objectsResult, templatesResult, presetsResult].some((result) => result.status === "fulfilled");
+  state.backendOnline = [appResult, objectsResult, templatesResult].some((result) => result.status === "fulfilled");
   state.error = objectsResult.status === "rejected" ? objectsResult.reason.message : null;
 
   const currentObjectId = state.app?.activeObjectId || state.objects.find((object) => object.is_current)?.id;
@@ -1410,6 +1781,34 @@ async function loadApplication() {
     }
   }
   if (!editorLoaded) state.loading = false;
+}
+
+async function recoverWorkspaceForCurrentRoute() {
+  const route = state.route;
+  if (!["object", "editor"].includes(route) || state.workspace?.object || state.loading || routeWorkspaceRecovery) return;
+  const objectId = Number(state.app?.activeObjectId || state.objects.find((object) => object.is_current)?.id || 0);
+  if (!objectId) return;
+  routeWorkspaceRecovery = (async () => {
+    state.loading = true;
+    state.error = null;
+    try {
+      const workspace = await api.workspace(objectId);
+      if (state.route !== route) return;
+      applyWorkspace(workspace, objectId);
+      if (route === "editor") {
+        const documentId = Number(state.requestedDocumentId || location.hash.split("/").at(-1));
+        const document = state.documents.find((item) => Number(item.id) === documentId);
+        if (!document) throw new Error("Документ не найден в текущем объекте");
+        loadEditorDocument(document);
+      }
+    } catch (error) {
+      if (state.route === route) state.error = error.message;
+    } finally {
+      if (state.route === route) state.loading = false;
+      routeWorkspaceRecovery = null;
+    }
+  })();
+  await routeWorkspaceRecovery;
 }
 
 function trapOverlayFocus(event) {
@@ -1449,9 +1848,8 @@ function openQuickCreate() {
     return;
   }
   if (state.route === "templates") {
-    state.templateWizard = null;
-    state.modalData = { templateId: "" };
-    state.modal = "upload-template";
+    state.modalData = null;
+    state.modal = "new-template";
   }
 }
 
@@ -1485,12 +1883,6 @@ document.addEventListener("keydown", (event) => {
     return;
   }
 
-  if (primaryModifier && key === "s" && state.route === "editor" && !state.modal) {
-    event.preventDefault();
-    saveEditorDocument();
-    return;
-  }
-
   if (primaryModifier && key === "n" && !state.modal) {
     event.preventDefault();
     openQuickCreate();
@@ -1502,8 +1894,8 @@ document.addEventListener("keydown", (event) => {
     state.modalData = null;
     return;
   }
-  if (event.key === "Escape" && state.route === "editor" && state.validationPanelOpen !== false) {
-    state.validationPanelOpen = false;
+  if (event.key === "Escape" && state.previewDocumentId) {
+    closeDocumentPreview();
     return;
   }
   if (event.key === "/" && !state.modal && !event.ctrlKey && !event.metaKey && !event.altKey) {
@@ -1518,5 +1910,7 @@ document.addEventListener("keydown", (event) => {
 });
 
 initRouter();
+addEventListener("hashchange", () => queueMicrotask(recoverWorkspaceForCurrentRoute));
+addEventListener("popstate", () => queueMicrotask(recoverWorkspaceForCurrentRoute));
 render();
 loadApplication();

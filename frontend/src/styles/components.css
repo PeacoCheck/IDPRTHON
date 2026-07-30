@@ -112,43 +112,56 @@
 
 .icon-button.is-active {
   border-color: transparent;
-  background: var(--primary-soft);
-  color: var(--primary);
+  background: var(--stamp-soft);
+  color: var(--stamp);
 }
 
 .badge {
   display: inline-flex;
   max-width: 100%;
-  min-height: 24px;
+  min-height: 23px;
   align-items: center;
   gap: 5px;
-  padding: 2px var(--space-2);
-  border-radius: var(--radius-sm);
+  padding: 2px 7px;
+  border: 1.5px solid var(--status-empty);
+  border-radius: var(--radius-stamp);
   background: var(--status-empty-soft);
-  color: var(--text-soft);
-  font-size: var(--fs-caption);
+  color: var(--status-empty);
+  font-family: var(--font-mono);
+  font-size: 11px;
   font-weight: var(--fw-medium);
+  letter-spacing: 0.06em;
   line-height: 1.2;
+  text-transform: uppercase;
 }
 
 .badge--ready {
+  border-color: var(--status-ready);
   background: var(--status-ready-soft);
   color: var(--status-ready);
 }
 
 .badge--warning {
+  border-color: var(--status-warning);
   background: var(--status-warning-soft);
   color: var(--status-warning);
 }
 
 .badge--error {
+  border-color: var(--status-error);
   background: var(--status-error-soft);
   color: var(--status-error);
 }
 
 .badge--primary {
-  background: var(--primary-soft);
-  color: var(--primary);
+  border-color: var(--stamp);
+  background: var(--stamp-soft);
+  color: var(--stamp);
+}
+
+.badge--empty,
+.badge--neutral {
+  border-style: dashed;
 }
 
 .field {
@@ -259,8 +272,8 @@
 }
 
 .tabs__button.is-active {
-  background: var(--primary-soft);
-  color: var(--primary);
+  background: var(--stamp-soft);
+  color: var(--stamp);
 }
 
 .modal-layer {
@@ -276,6 +289,7 @@
 
 .modal {
   display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   width: min(520px, calc(100vw - 48px));
   max-height: min(760px, calc(100vh - 48px));
   overflow: hidden;
@@ -292,6 +306,10 @@
 
 .modal--lg {
   width: min(760px, calc(100vw - 48px));
+}
+
+.modal--xl {
+  width: min(1120px, calc(100vw - 48px));
 }
 
 .modal__header,
@@ -349,7 +367,7 @@
   box-shadow: var(--shadow-sm);
   color: var(--text);
   pointer-events: auto;
-  animation: modal-in var(--transition-modal);
+  animation: toast-in var(--transition-modal);
 }
 
 .toast__icon {
@@ -423,6 +441,11 @@
   gap: var(--space-2);
   padding: var(--space-6);
   color: var(--text-soft);
+  background-color: var(--surface-muted);
+  background-image:
+    linear-gradient(var(--grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+  background-size: 8px 8px;
   text-align: center;
 }
 
@@ -530,4 +553,125 @@
 
 @keyframes menu-in {
   from { opacity: 0; transform: translateY(-2px); }
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(4px); }
+}
+
+/* Technical archive identity: stamps, drawing fields and documentary values. */
+.stamp {
+  display: inline-flex;
+  min-height: 23px;
+  align-items: center;
+  padding: 2px 7px;
+  border: 1.5px solid currentColor;
+  border-radius: var(--radius-stamp);
+  background: var(--status-empty-soft);
+  color: var(--status-empty);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: var(--fw-medium);
+  letter-spacing: 0.06em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.stamp--ready {
+  background: var(--status-ready-soft);
+  color: var(--status-ready);
+}
+
+.stamp--warning {
+  background: var(--status-warning-soft);
+  color: var(--status-warning);
+}
+
+.stamp--error {
+  background: var(--status-error-soft);
+  color: var(--status-error);
+}
+
+.stamp--empty {
+  border-style: dashed;
+}
+
+.stamp--ink {
+  background: var(--stamp-soft);
+  color: var(--stamp);
+}
+
+.completeness-stamp {
+  display: grid;
+  min-width: 132px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+}
+
+.completeness-stamp > * {
+  display: grid;
+  min-height: 42px;
+  align-content: center;
+  padding: var(--space-2) var(--space-3);
+}
+
+.completeness-stamp > * + * {
+  border-left: 1px solid var(--border-strong);
+}
+
+.completeness-stamp strong {
+  font-family: var(--font-mono);
+  font-size: 20px;
+  font-weight: var(--fw-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+.completeness-stamp small {
+  color: var(--text-faint);
+  font-family: var(--font-heading);
+  font-size: 10px;
+  font-weight: var(--fw-semibold);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.object-card.object-card,
+.template-card.template-card {
+  transition: border-color var(--duration-instant) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard), transform var(--duration-fast) var(--ease-standard);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .object-card.object-card:hover,
+  .template-card.template-card:hover {
+    border-color: var(--border-strong);
+    box-shadow: var(--shadow-lift);
+    transform: translateY(-2px);
+  }
+}
+
+.editor-section__body:not([hidden]) {
+  animation: section-reveal var(--transition-section);
+}
+
+.editor-section__chevron {
+  transition: color var(--duration-instant) var(--ease-standard), transform var(--transition-section);
+}
+
+@keyframes section-reveal {
+  from { opacity: 0; transform: translateY(-2px); }
+}
+
+@media (max-width: 480px) {
+  .modal-layer {
+    padding: var(--space-3);
+  }
+
+  .modal,
+  .modal--sm,
+  .modal--lg,
+  .modal--xl {
+    width: calc(100vw - 24px);
+    max-height: calc(100vh - 24px);
+  }
 }

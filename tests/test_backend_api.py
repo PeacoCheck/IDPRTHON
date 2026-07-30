@@ -96,6 +96,7 @@ class BackendApiRegressionTests(unittest.TestCase):
         completion_status: str = "not_started",
         values: dict | None = None,
         missing: list | None = None,
+        with_file: bool = False,
     ) -> int:
         with self.session_factory.begin() as db:
             document = Document(
@@ -115,6 +116,11 @@ class BackendApiRegressionTests(unittest.TestCase):
             )
             db.add(document)
             db.flush()
+            if with_file:
+                source = self.root / "vault" / "objects" / "TEST-001" / "documents" / f"document-{document.id}.pdf"
+                source.parent.mkdir(parents=True, exist_ok=True)
+                source.write_bytes(b"%PDF-1.4\n% test\n")
+                document.source_file = str(source)
             return document.id
 
     def test_object_fields_are_fresh_on_read_and_generation(self) -> None:
@@ -156,7 +162,10 @@ class BackendApiRegressionTests(unittest.TestCase):
         with patch.object(api, "resolve_template_path", return_value=source):
             result = api.generate_documents({"ids": [document_id]})
 
-        output = Path(result["made"][0]["file"])
+        self.assertEqual(f"/api/files/{document_id}", result["made"][0]["download_url"])
+        self.assertNotIn(str(self.root), result["made"][0]["file"])
+        with self.session_factory() as db:
+            output = Path(db.get(Document, document_id).output_file)
         rendered = WordDocument(output)
         rendered_text = "\n".join(paragraph.text for paragraph in rendered.paragraphs)
         self.assertIn("NEW CUSTOMER", rendered_text)
@@ -209,11 +218,11 @@ class BackendApiRegressionTests(unittest.TestCase):
         )
         self.assertEqual("needs_revision", revised.completion_status)
 
-    def test_completeness_sections_require_completed_and_no_missing_fields(self) -> None:
+    def test_completeness_separates_present_files_from_completion_status(self) -> None:
         object_id = self.create_object()
         group_id = self.create_group(object_id)
-        self.create_document(object_id, group_id=group_id, completion_status="completed")
-        self.create_document(object_id, group_id=group_id, completion_status="not_started")
+        self.create_document(object_id, group_id=group_id, completion_status="completed", with_file=True)
+        self.create_document(object_id, group_id=group_id, completion_status="not_started", with_file=True)
         self.create_document(
             object_id,
             group_id=group_id,
@@ -225,6 +234,9 @@ class BackendApiRegressionTests(unittest.TestCase):
 
         self.assertEqual(1, report["ready"])
         self.assertEqual(1, report["sections"][0]["ready"])
+        self.assertEqual(2, report["present_files"])
+        self.assertEqual(1, report["completed_files"])
+        self.assertEqual(2, report["sections"][0]["present_files"])
         self.assertEqual(3, report["sections"][0]["total"])
         self.assertEqual("warning", report["sections"][0]["status"])
 

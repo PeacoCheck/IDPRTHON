@@ -10,6 +10,7 @@
   width: 100%;
   height: 100%;
   background: var(--bg);
+  view-transition-name: id-vault-shell;
 }
 
 .rail {
@@ -72,8 +73,8 @@
 }
 
 .rail__button.is-active {
-  background: var(--primary-soft);
-  color: var(--primary);
+  background: var(--stamp-soft);
+  color: var(--stamp);
 }
 
 .rail__status {
@@ -182,6 +183,34 @@
   overflow: auto;
   padding: var(--space-6);
   background: var(--bg);
+  view-transition-name: id-vault-content;
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+}
+
+::view-transition-old(id-vault-shell),
+::view-transition-new(id-vault-shell) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+::view-transition-old(id-vault-content) {
+  animation: id-vault-route-out 100ms var(--ease-standard) both;
+}
+
+::view-transition-new(id-vault-content) {
+  animation: id-vault-route-in var(--duration-route) var(--ease-out) both;
+}
+
+@keyframes id-vault-route-out {
+  to { opacity: 0; }
+}
+
+@keyframes id-vault-route-in {
+  from { opacity: 0; }
 }
 
 .view-frame {
@@ -250,5 +279,33 @@
 
   .content {
     padding: var(--space-4);
+  }
+}
+
+@media (max-width: 480px) {
+  :root {
+    --rail-width: 48px;
+    --topbar-height: 56px;
+  }
+
+  .rail__button {
+    width: 34px;
+    height: 34px;
+  }
+
+  .topbar {
+    min-width: 0;
+    padding: 0 var(--space-2);
+  }
+
+  .content {
+    padding: var(--space-3);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shell,
+  .content {
+    view-transition-name: none;
   }
 }

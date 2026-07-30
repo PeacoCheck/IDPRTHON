@@ -37,12 +37,13 @@ function renderObjectCard(object, state) {
   const action = archived ? "restore-object" : "archive-object";
   const actionBusy = isBusy(state, action, object.id);
   const documentsCount = Math.max(0, Number(object.documents_count) || 0);
+  const presentCount = Math.min(documentsCount, Math.max(0, Number(object.present_files ?? object.present_count ?? object.files_count ?? object.ready_count) || 0));
   const readyCount = Math.min(documentsCount, Math.max(0, Number(object.ready_count) || 0));
   const integrity = Math.min(100, Math.max(0, Number(object.integrity) || 0));
   const issues = Math.max(0, Number(object.issues_count) || 0);
   const title = object.short_name || object.name || "Объект без названия";
 
-  return `<article class="object-card" data-object-status="${archived ? "archived" : "active"}">
+  return `<article class="object-card" id="object-card-${escapeHtml(object.id)}" data-object-status="${archived ? "archived" : "active"}">
     <button class="object-card__open" type="button" data-open-object="${escapeHtml(object.id)}" aria-label="Открыть объект ${escapeHtml(title)}">
       <span class="object-card__topline">
         <span class="object-card__code mono">${escapeHtml(object.code || "Без кода")}</span>
@@ -58,9 +59,9 @@ function renderObjectCard(object, state) {
       </span>
       <span class="object-card__address">${icon("mapPin", 16)}<span>${escapeHtml(object.address || "Адрес не указан")}</span></span>
       <span class="object-card__metrics">
-        <span><strong class="tabular">${numberFormat.format(readyCount)} / ${numberFormat.format(documentsCount)}</strong><small>готово документов</small></span>
-        <span><strong class="tabular">${numberFormat.format(integrity)}%</strong><small>комплектность</small></span>
-        <span class="${issues ? "has-issues" : ""}"><strong class="tabular">${numberFormat.format(issues)}</strong><small>замечания</small></span>
+        <span><strong class="tabular">${numberFormat.format(presentCount)} / ${numberFormat.format(documentsCount)}</strong><small>файлов на месте</small></span>
+        <span><strong class="tabular">${numberFormat.format(readyCount)}</strong><small>помечено готовыми</small></span>
+        <span class="${issues ? "has-issues" : ""}"><strong class="tabular">${numberFormat.format(issues)}</strong><small>разрывы структуры</small></span>
       </span>
       <span class="object-card__integrity">
         <span><span>Готовность комплекта</span><strong class="tabular">${numberFormat.format(integrity)}%</strong></span>
@@ -126,7 +127,7 @@ function renderObjectsContent(state, scopedObjects, visibleObjects, query) {
     });
   }
 
-  return `<div class="objects-grid">${visibleObjects.map((object) => renderObjectCard(object, state)).join("")}</div>`;
+  return `<div class="objects-grid" data-auto-animate="objects">${visibleObjects.map((object) => renderObjectCard(object, state)).join("")}</div>`;
 }
 
 export function renderObjectsView(state) {
@@ -141,8 +142,9 @@ export function renderObjectsView(state) {
   return `<section class="view-frame objects-view" data-view="objects">
     <header class="objects-header">
       <div>
+        <span class="technical-eyebrow">Локальный технический архив</span>
         <h1>Объекты</h1>
-        <p>Реестры исполнительной документации и состояние комплектов.</p>
+        <p>Файлы исполнительной документации, структура групп и контроль комплектности.</p>
       </div>
       ${button({ label: "Добавить объект", action: "new-object", iconName: "plus", variant: "primary" })}
     </header>

@@ -1,7 +1,7 @@
 .objects-view {
   display: grid;
   align-content: start;
-  gap: var(--space-6);
+  gap: var(--space-4);
 }
 
 .objects-header {
@@ -19,6 +19,14 @@
 .objects-header p {
   margin-top: var(--space-1);
   color: var(--text-soft);
+  font-size: var(--fs-caption);
+}
+
+.objects-header h1 {
+  margin-top: 2px;
+  font-family: var(--font-heading);
+  font-size: var(--fs-display);
+  font-weight: var(--fw-semibold);
 }
 
 .objects-toolbar {
@@ -93,7 +101,7 @@
 .objects-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--space-4);
+  gap: var(--space-3);
 }
 
 .object-card {
@@ -103,6 +111,13 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: var(--surface);
+  transition: var(--transition-hover);
+}
+
+.object-card:hover {
+  border-color: var(--border-strong);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lift);
 }
 
 .object-card__open {
@@ -139,7 +154,7 @@
 
 .object-card__code {
   overflow: hidden;
-  color: var(--text-soft);
+  color: var(--stamp);
   font-size: var(--fs-caption);
   font-weight: var(--fw-medium);
   text-overflow: ellipsis;
@@ -158,8 +173,11 @@
   height: 36px;
   place-items: center;
   border-radius: var(--radius);
-  background: var(--primary-soft);
-  color: var(--primary);
+  border: 1px solid var(--stamp);
+  border-radius: var(--radius-stamp);
+  background: var(--stamp-soft);
+  color: var(--stamp);
+  transform: rotate(-2deg);
 }
 
 .object-card__identity > span:nth-child(2) {
@@ -176,6 +194,7 @@
 }
 
 .object-card__identity strong {
+  font-family: var(--font-heading);
   font-size: var(--fs-heading);
   font-weight: var(--fw-semibold);
 }
@@ -270,7 +289,7 @@
   width: var(--object-progress);
   height: 100%;
   border-radius: inherit;
-  background: var(--primary);
+  background: var(--stamp);
 }
 
 .object-card__footer {
