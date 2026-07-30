@@ -194,6 +194,8 @@ function initAutoAnimate() {
 
 function renderInner() {
   const position = captureUiPosition();
+  const routeChanged = renderedRoute !== null && renderedRoute !== state.route;
+  if (routeChanged) position.mainScroll = 0;
   const nextOverlayKey = state.commandOpen
     ? "command"
     : state.modal
@@ -230,7 +232,9 @@ function renderInner() {
   });
   initAutoAnimate();
   hydrateFilePreviews(root);
-  hydrateCharts(root).catch(() => {});
+  hydrateCharts(root).catch((error) => {
+    console.error("Не удалось загрузить диаграммы комплектности", error);
+  });
   renderToast();
   activeOverlayKey = nextOverlayKey;
   renderedRoute = state.route;

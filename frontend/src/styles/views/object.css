@@ -107,7 +107,7 @@
   background: var(--surface);
 }
 
-.completeness-stamp {
+.object-completeness-stamp {
   position: relative;
   display: grid;
   flex: 0 0 232px;
@@ -122,12 +122,12 @@
   color: var(--text);
 }
 
-.completeness-stamp__chart {
+.object-completeness-stamp__chart {
   width: 138px;
   height: 138px;
 }
 
-.completeness-stamp__label {
+.object-completeness-stamp__label {
   position: absolute;
   z-index: 1;
   display: grid;
@@ -135,8 +135,8 @@
   pointer-events: none;
 }
 
-.completeness-stamp__label > span,
-.completeness-stamp__label > small {
+.object-completeness-stamp__label > span,
+.object-completeness-stamp__label > small {
   font-family: var(--font-mono);
   font-size: 9px;
   font-weight: var(--fw-semibold);
@@ -144,7 +144,7 @@
   text-transform: uppercase;
 }
 
-.completeness-stamp__label strong {
+.object-completeness-stamp__label strong {
   display: flex;
   align-items: baseline;
   font-family: var(--font-heading);
@@ -154,7 +154,7 @@
   line-height: 1;
 }
 
-.completeness-stamp__label strong i {
+.object-completeness-stamp__label strong i {
   margin: 0 3px;
   font-size: 22px;
   font-style: normal;
@@ -1082,11 +1082,11 @@
     z-index: 30;
   }
 
-  .completeness-stamp {
+  .object-completeness-stamp {
     flex-basis: 184px;
   }
 
-  .completeness-stamp__chart {
+  .object-completeness-stamp__chart {
     width: 124px;
     height: 124px;
   }
@@ -1179,7 +1179,7 @@
     display: grid;
   }
 
-  .completeness-stamp {
+  .object-completeness-stamp {
     min-height: 142px;
     border-right: 0;
     border-bottom: 1px solid var(--border);

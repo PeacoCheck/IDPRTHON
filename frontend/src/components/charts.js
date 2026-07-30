@@ -1,6 +1,8 @@
 const chartRecords = new Map();
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 let chartModulePromise = null;
+let chartRetryUrl = "";
+let chartImportAttempt = 0;
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -264,8 +266,36 @@ function chartElements(root) {
   return elements;
 }
 
+function importUrlFromError(error) {
+  const match = String(error?.message || error || "").match(/https?:\/\/[^\s)]+\.js(?:\?[^\s)]*)?/i);
+  if (!match) return "";
+  try {
+    const url = new URL(match[0], location.href);
+    if (url.origin !== location.origin || !url.pathname.endsWith(".js")) return "";
+    url.search = "";
+    url.hash = "";
+    return url.href;
+  } catch {
+    return "";
+  }
+}
+
+function importChartModule() {
+  if (!chartRetryUrl) return import("chart.js/auto");
+  const retryUrl = `${chartRetryUrl}?retry=${++chartImportAttempt}`;
+  return import(/* @vite-ignore */ retryUrl);
+}
+
 async function chartConstructor() {
-  chartModulePromise ||= import("chart.js/auto").then((module) => module.default);
+  if (!chartModulePromise) {
+    chartModulePromise = importChartModule()
+      .then((module) => module.default)
+      .catch((error) => {
+        chartRetryUrl ||= importUrlFromError(error);
+        chartModulePromise = null;
+        throw error;
+      });
+  }
   return chartModulePromise;
 }
 

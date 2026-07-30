@@ -4,6 +4,7 @@
 }
 
 .reports-header {
+  display: flex;
   align-items: flex-end;
   justify-content: space-between;
   gap: var(--space-4);
@@ -88,6 +89,7 @@
 
 .reports-chart-panel > header,
 .reports-list-panel > header {
+  display: flex;
   align-items: flex-end;
   justify-content: space-between;
   gap: var(--space-3);
@@ -222,9 +224,28 @@
 
   .report-object-row {
     grid-template-columns: minmax(0, 1fr) auto 20px;
+    grid-template-areas:
+      "identity value open"
+      "identity issues open";
+  }
+
+  .report-object-row__identity {
+    grid-area: identity;
+  }
+
+  .report-object-row__value {
+    grid-area: value;
   }
 
   .report-object-row__issues {
-    display: none;
+    grid-area: issues;
+    display: flex;
+    align-items: baseline;
+    justify-content: flex-end;
+    gap: 4px;
+  }
+
+  .report-object-row__open {
+    grid-area: open;
   }
 }

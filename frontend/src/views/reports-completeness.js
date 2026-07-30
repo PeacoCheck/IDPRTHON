@@ -38,7 +38,7 @@ function reportObjects(state) {
 
 function renderReportRow(object) {
   const title = object.short_name || object.name || "Объект без названия";
-  return `<button class="report-object-row" type="button" data-open-object="${escapeHtml(object.id)}" aria-label="Открыть объект ${escapeHtml(title)}">
+  return `<button class="report-object-row" type="button" data-open-object="${escapeHtml(object.id)}" aria-label="Открыть объект ${escapeHtml(title)}: комплектность ${object.integrity}%, файлов ${object.present} из ${object.documents}, разрывов ${object.issues}">
     <span class="report-object-row__identity"><span class="mono">${escapeHtml(object.code || "Без кода")}</span><strong>${escapeHtml(title)}</strong><small>${escapeHtml(object.address || "Адрес не указан")}</small></span>
     <span class="report-object-row__value"><strong class="tabular">${numberFormat.format(object.integrity)}%</strong><small>${numberFormat.format(object.present)}/${numberFormat.format(object.documents)} файлов</small></span>
     <span class="report-object-row__issues${object.issues ? " has-issues" : ""}"><strong class="tabular">${numberFormat.format(object.issues)}</strong><small>разрывов</small></span>

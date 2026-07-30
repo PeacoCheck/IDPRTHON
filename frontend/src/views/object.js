@@ -138,23 +138,31 @@ function integrityNumbers(workspace, documents) {
 function renderCompletenessBoard(state, workspace, documents) {
   const values = integrityNumbers(workspace, documents);
   const objectId = workspace.object?.id || "current";
+  const progressAttributes = values.total
+    ? `role="progressbar" aria-label="Комплектность объекта" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${values.score}" aria-valuetext="Выполнено ${values.satisfied} из ${values.total} требований"`
+    : 'role="status" aria-label="Требования комплектности не заданы"';
+  const completenessTitle = !values.total
+    ? "Требования не заданы"
+    : values.missing
+      ? `Не хватает ${values.missing}`
+      : "Структура собрана";
   return `<section class="completeness-board" aria-label="Комплектность объекта">
-    <div class="completeness-stamp" role="progressbar" aria-label="Выполнено ${values.satisfied} из ${values.total} требований" aria-valuemin="0" aria-valuemax="${values.total}" aria-valuenow="${values.satisfied}">
+    <div class="object-completeness-stamp" ${progressAttributes}>
       ${renderChartCanvas({
         id: `chart-object-completeness-${objectId}`,
         kind: "object-doughnut",
         payload: { satisfied: values.satisfied, total: values.total },
-        className: "completeness-stamp__chart",
+        className: "object-completeness-stamp__chart",
       })}
-      <div class="completeness-stamp__label">
+      <div class="object-completeness-stamp__label">
         <span>КОМПЛЕКТ</span>
         <strong class="tabular">${numberFormat.format(values.satisfied)}<i>/</i>${numberFormat.format(values.total)}</strong>
-        <small>${values.score}% собрано</small>
+        <small>${values.total ? `${values.score}% собрано` : "Нет требований"}</small>
       </div>
     </div>
     <div class="completeness-board__body">
       <div class="completeness-board__heading">
-        <div><span class="technical-eyebrow">Контроль архива</span><h2>${values.missing ? `Не хватает ${values.missing}` : "Структура собрана"}</h2></div>
+        <div><span class="technical-eyebrow">Контроль архива</span><h2>${completenessTitle}</h2></div>
         <button type="button" class="text-action" data-action="set-object-tab" data-object-tab="integrity">Открыть проверку ${icon("arrowRight", 15)}</button>
       </div>
       <div class="completeness-metrics">
