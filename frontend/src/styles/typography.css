@@ -19,21 +19,20 @@ h3,
 .section-title,
 .topbar__title {
   font-family: var(--font-heading);
+  font-weight: var(--fw-bold);
 }
 
 h1 {
   font-size: var(--fs-display);
-  font-weight: var(--fw-semibold);
   line-height: 1.2;
-  letter-spacing: 0.005em;
+  letter-spacing: 0;
 }
 
 h2,
 h3 {
   font-size: var(--fs-heading);
-  font-weight: var(--fw-semibold);
   line-height: 1.3;
-  letter-spacing: 0.015em;
+  letter-spacing: 0.005em;
 }
 
 .mono,
@@ -54,7 +53,7 @@ time {
 .technical-label {
   font-family: var(--font-heading);
   font-size: var(--fs-eyebrow);
-  font-weight: var(--fw-semibold);
-  letter-spacing: 0.07em;
+  font-weight: var(--fw-bold);
+  letter-spacing: 0.055em;
   text-transform: uppercase;
 }

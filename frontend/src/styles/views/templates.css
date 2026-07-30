@@ -40,7 +40,7 @@
   margin-top: 2px;
   font-family: var(--font-heading);
   font-size: var(--fs-display);
-  font-weight: var(--fw-semibold);
+  font-weight: var(--fw-bold);
 }
 
 .templates-header p {
@@ -170,7 +170,7 @@
   margin-top: 2px;
   font-family: var(--font-heading);
   font-size: 16px;
-  font-weight: var(--fw-semibold);
+  font-weight: var(--fw-bold);
   line-height: 1.25;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;

@@ -26,7 +26,7 @@
   margin-top: 2px;
   font-family: var(--font-heading);
   font-size: var(--fs-display);
-  font-weight: var(--fw-semibold);
+  font-weight: var(--fw-bold);
 }
 
 .objects-toolbar {
@@ -196,7 +196,7 @@
 .object-card__identity strong {
   font-family: var(--font-heading);
   font-size: var(--fs-heading);
-  font-weight: var(--fw-semibold);
+  font-weight: var(--fw-bold);
 }
 
 .object-card__identity small,

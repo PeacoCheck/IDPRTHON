@@ -75,7 +75,7 @@
 .file-inspector-header__eyebrow .mono {
   color: var(--stamp);
   font-size: var(--fs-caption);
-  font-weight: var(--fw-semibold);
+  font-weight: var(--fw-bold);
   letter-spacing: .04em;
 }
 
@@ -224,6 +224,7 @@
   color: var(--text);
   font-family: var(--font-heading);
   font-size: var(--fs-heading);
+  font-weight: var(--fw-bold);
 }
 
 .file-facts dl {
@@ -392,6 +393,7 @@
   color: var(--text);
   font-family: var(--font-heading);
   font-size: 18px;
+  font-weight: var(--fw-bold);
 }
 
 .file-drop-overlay small {

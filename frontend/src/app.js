@@ -1,17 +1,11 @@
-import "@fontsource/ibm-plex-sans/cyrillic-400.css";
-import "@fontsource/ibm-plex-sans/cyrillic-500.css";
-import "@fontsource/ibm-plex-sans/cyrillic-600.css";
-import "@fontsource/ibm-plex-sans/latin-400.css";
-import "@fontsource/ibm-plex-sans/latin-500.css";
-import "@fontsource/ibm-plex-sans/latin-600.css";
-import "@fontsource/ibm-plex-sans-condensed/cyrillic-ext-600.css";
-import "@fontsource/ibm-plex-sans-condensed/latin-600.css";
-import "@fontsource/ibm-plex-mono/cyrillic-400.css";
-import "@fontsource/ibm-plex-mono/cyrillic-500.css";
-import "@fontsource/ibm-plex-mono/cyrillic-600.css";
-import "@fontsource/ibm-plex-mono/latin-400.css";
-import "@fontsource/ibm-plex-mono/latin-500.css";
-import "@fontsource/ibm-plex-mono/latin-600.css";
+import "@fontsource/ibm-plex-sans/400.css";
+import "@fontsource/ibm-plex-sans/500.css";
+import "@fontsource/ibm-plex-sans/600.css";
+import "@fontsource/ibm-plex-mono/400.css";
+import "@fontsource/ibm-plex-mono/500.css";
+import "@fontsource/ibm-plex-mono/600.css";
+import "@fontsource/pt-sans-narrow/400.css";
+import "@fontsource/pt-sans-narrow/700.css";
 import "./styles/tokens.css";
 import "./styles/theme-dark.css";
 import "./styles/reset.css";
@@ -199,6 +193,16 @@ function renderInner() {
     morphStyle: "innerHTML",
     ignoreActiveValue: true,
     restoreFocus: true,
+    callbacks: {
+      beforeNodeMorphed(oldNode, newNode) {
+        if (!(oldNode instanceof Element) || !(newNode instanceof Element)) return true;
+        if (!oldNode.matches("[data-file-preview]") || !newNode.matches("[data-file-preview]")) return true;
+        const isHydrated = oldNode.dataset.previewHydrated === "true";
+        const sameSource = oldNode.dataset.previewUrl === newNode.dataset.previewUrl;
+        const sameDataSource = (oldNode.dataset.previewDataUrl || "") === (newNode.dataset.previewDataUrl || "");
+        return !(isHydrated && sameSource && sameDataSource);
+      },
+    },
   });
   initAutoAnimate();
   hydrateFilePreviews(root);

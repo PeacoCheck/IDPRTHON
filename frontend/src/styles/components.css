@@ -631,7 +631,7 @@
   color: var(--text-faint);
   font-family: var(--font-heading);
   font-size: 10px;
-  font-weight: var(--fw-semibold);
+  font-weight: var(--fw-bold);
   letter-spacing: 0.07em;
   text-transform: uppercase;
 }

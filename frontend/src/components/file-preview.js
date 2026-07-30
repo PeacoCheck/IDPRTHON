@@ -1,5 +1,3 @@
-import { renderAsync as renderDocx } from "docx-preview";
-
 import { icon } from "./icons.js";
 import { escapeHtml } from "./ui.js";
 
@@ -113,11 +111,12 @@ export function renderFilePreview(document, { compact = false, template = false 
     : previewUrl(id);
   const kind = previewKind(info.extension);
   const classes = `file-preview file-preview--${kind}${compact ? " file-preview--compact" : ""}`;
+  const previewId = `${template ? "template" : "document"}-${id}`;
   if (kind === "pdf") {
-    return `<div class="${classes}" data-preview-kind="pdf"><iframe src="${escapeHtml(url)}#toolbar=0&navpanes=0" title="Предпросмотр ${escapeHtml(info.fileName)}" loading="lazy"></iframe></div>`;
+    return `<div class="${classes}" data-preview-kind="pdf"><iframe id="preview-frame-${escapeHtml(previewId)}" src="${escapeHtml(url)}#toolbar=0&navpanes=0" title="Предпросмотр ${escapeHtml(info.fileName)}" loading="lazy"></iframe></div>`;
   }
   if (kind === "image") {
-    return `<div class="${classes}" data-preview-kind="image"><button class="file-preview__image-button" type="button" data-action="toggle-preview-zoom" aria-label="Увеличить изображение"><img src="${escapeHtml(url)}" alt="Предпросмотр ${escapeHtml(info.fileName)}" loading="lazy"></button><span class="file-preview__zoom-hint">Нажмите, чтобы увеличить</span></div>`;
+    return `<div class="${classes}" data-preview-kind="image"><button class="file-preview__image-button" type="button" data-action="toggle-preview-zoom" aria-label="Увеличить изображение"><img id="preview-image-${escapeHtml(previewId)}" src="${escapeHtml(url)}" alt="Предпросмотр ${escapeHtml(info.fileName)}" loading="lazy"></button><span class="file-preview__zoom-hint">Нажмите, чтобы увеличить</span></div>`;
   }
   if (["docx", "sheet", "text"].includes(kind)) {
     const dataUrl = kind === "sheet" ? ` data-preview-data-url="${escapeHtml(spreadsheetPreviewUrl(id, template))}"` : "";
@@ -241,6 +240,7 @@ async function hydratePreview(container) {
       const buffer = await response.arrayBuffer();
       if (!container.isConnected || container.dataset.previewUrl !== requestedUrl) return;
       if (kind === "docx") {
+        const { renderAsync: renderDocx } = await import("docx-preview");
         const host = document.createElement("div");
         host.className = "docx-preview__host";
         await renderDocx(buffer, host, null, {
