@@ -21,6 +21,7 @@ import "./styles/views/object.css";
 import "./styles/views/editor.css";
 import "./styles/views/templates.css";
 import "./styles/views/reports.css";
+import "./styles/views/autocad.css";
 import "./styles/utilities.css";
 
 import autoAnimate from "@formkit/auto-animate";
@@ -34,11 +35,13 @@ import { shell } from "./components/shell.js";
 import { button, emptyState, escapeHtml, modal, skeleton, toastView } from "./components/ui.js";
 import { initRouter, navigate } from "./router.js";
 import { notify, state, subscribe } from "./store.js";
+import { renderHomeView } from "./views/home.js";
 import { renderEditorModal, renderEditorValidation, renderEditorView } from "./views/editor.js";
 import { renderObjectModal, renderObjectView } from "./views/object.js";
 import { renderNewObjectModal, renderObjectsView } from "./views/objects.js";
 import { renderReportsCompletenessView } from "./views/reports-completeness.js";
 import { renderTemplateModal, renderTemplatesView } from "./views/templates.js";
+import { initAutocadView, renderAutocadView, hydrateAutocadView, renderAcModal, getAcSkillById, openSkillModal, executeSkill, showAcToast } from "./views/autocad.js";
 
 const root = document.getElementById("app");
 const toastHost = document.createElement("div");
@@ -86,12 +89,14 @@ function pendingView() {
 }
 
 function routeView() {
+  if (state.route === "home") return renderHomeView(state);
   if (state.route === "objects") return renderObjectsView(state);
   if (state.route === "object") return renderObjectView(state);
   if (state.route === "editor") return renderEditorView(state);
   if (state.route === "templates") return renderTemplatesView(state);
   if (state.route === "reports/completeness") return renderReportsCompletenessView(state);
-  return pendingView();
+  if (state.route === "autocad") return renderAutocadView();
+  return renderHomeView(state);
 }
 
 function archiveModal() {
@@ -111,9 +116,59 @@ function archiveModal() {
   });
 }
 
+function diagnosticsModal() {
+  const report = state.diagnosticsData;
+  const isFetching = state.fetchingDiagnostics;
+
+  let body = "";
+  if (isFetching || !report) {
+    body = `<div style="text-align:center;padding:32px;color:var(--text-soft)">Диагностика систем...</div>`;
+  } else {
+    body = `
+      <div style="margin-bottom:var(--space-4)">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+          <div style="width:10px;height:10px;border-radius:50%;background:${report.all_ok ? 'var(--status-ready)' : 'var(--status-error)'};"></div>
+          <span style="font-weight:600;font-size:14px">${report.all_ok ? 'Все системы работают нормально!' : 'Обнаружены проблемы с подключением'}</span>
+        </div>
+        ${report.checks.map(c => `
+          <div style="display:flex;align-items:flex-start;gap:12px;padding:12px 0;border-bottom:1px solid var(--border)">
+            <div style="margin-top:2px;flex-shrink:0;width:14px;height:14px;border-radius:50%;background:${c.ok ? 'var(--status-ready)' : 'var(--status-error)'};"></div>
+            <div>
+              <div style="font-weight:600;font-size:13px;color:var(--text)">${escapeHtml(c.label)}</div>
+              <div style="font-size:11px;color:var(--text-soft);margin-top:2px">${escapeHtml(c.detail)}</div>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+      ${!report.status?.connected ? `
+        <div style="background:var(--surface-alt);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-top:8px;display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:12px;color:var(--text-soft)">AutoCAD не запущен. Попробовать открыть?</span>
+          <button class="button button--primary button--sm" type="button" data-action="launch-autocad">${icon("play", 13)} Запустить AutoCAD</button>
+        </div>
+      ` : `
+        <div style="background:var(--surface-muted);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-top:8px">
+          <div style="font-size:12px;color:var(--text-soft)">Активный чертеж: <b>${escapeHtml(report.status.active_document)}</b></div>
+        </div>
+      `}
+    `;
+  }
+
+  return modal({
+    title: "Диагностика систем",
+    description: "Проверка подключения микросервисов и AutoCAD COM-интерфейса",
+    body: body,
+    footer: `
+      ${button({ label: "Обновить", action: "refresh-diagnostics", iconName: "refresh", variant: "secondary" })}
+      ${button({ label: "Закрыть", action: "close-modal", variant: "primary" })}
+    `,
+  });
+}
+
 function modalView() {
   if (state.modal === "new-object") return renderNewObjectModal(state);
   if (state.modal === "archive-object") return archiveModal();
+  if (state.modal === "diagnostics") return diagnosticsModal();
+  if (state.modal === "autocad-skill") return renderAcModal();
   const objectModal = renderObjectModal(state);
   if (objectModal) return objectModal;
   const editorModal = renderEditorModal(state);
@@ -235,6 +290,7 @@ function renderInner() {
   hydrateCharts(root).catch((error) => {
     console.error("Не удалось загрузить диаграммы комплектности", error);
   });
+  if (state.route === "autocad") hydrateAutocadView();
   renderToast();
   activeOverlayKey = nextOverlayKey;
   renderedRoute = state.route;
@@ -269,6 +325,9 @@ subscribe((key) => {
     return;
   }
   if (key === "theme") applyTheme();
+  if (key === "route") {
+    queueMicrotask(recoverWorkspaceForCurrentRoute);
+  }
   if (!renderQueued) {
     renderQueued = true;
     requestAnimationFrame(render);
@@ -1007,6 +1066,24 @@ async function openObjectWorkspace(objectId) {
   }
 }
 
+async function setCurrentObject(objectId) {
+  if (!objectId || state.busyAction) return;
+  state.busyAction = `set-current-object-${objectId}`;
+  render();
+  try {
+    const appData = await api.setActiveObject(objectId);
+    state.app = appData;
+    await refreshObjects();
+    await refreshWorkspace(objectId);
+    notify("Объект выбран текущим", "success");
+  } catch (error) {
+    notify(error.message, "error");
+  } finally {
+    state.busyAction = null;
+    render();
+  }
+}
+
 async function restoreObject(objectId) {
   if (state.busyAction) return;
   state.busyAction = `restore-object-${objectId}`;
@@ -1076,7 +1153,72 @@ async function confirmArchiveTemplate(templateId) {
   }
 }
 
+async function fetchDiagnostics() {
+  state.fetchingDiagnostics = true;
+  state.modal = "diagnostics";
+  render();
+  try {
+    const res = await fetch("/autocad-api/diagnostics");
+    if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+    state.diagnosticsData = await res.json();
+  } catch (err) {
+    state.diagnosticsData = {
+      all_ok: false,
+      status: { connected: false, message: "Не удалось подключиться к AutoCAD-сервису" },
+      checks: [
+        { id: "pywin32", label: "Библиотека pywin32", ok: false, detail: "Ошибка запроса к сервису" },
+        { id: "acad_process", label: "Процесс AutoCAD (acad.exe)", ok: false, detail: "Ошибка запроса к сервису" },
+        { id: "com_conn", label: "COM-подключение к AutoCAD", ok: false, detail: err.message },
+        { id: "skills_dir", label: "Папка со скиллами", ok: false, detail: "Нет связи" },
+        { id: "db", label: "База данных", ok: false, detail: "Нет связи" }
+      ]
+    };
+  } finally {
+    state.fetchingDiagnostics = false;
+    render();
+  }
+}
+
+async function launchAutocadFromModal(buttonEl) {
+  if (buttonEl) {
+    buttonEl.disabled = true;
+    buttonEl.innerHTML = "Запуск...";
+  }
+  try {
+    const res = await fetch("/autocad-api/diagnostics/open-autocad", { method: "POST" });
+    const data = await res.json();
+    notify(data.message, data.ok ? "ready" : "error");
+  } catch (err) {
+    notify(err.message, "error");
+  } finally {
+    if (buttonEl) {
+      buttonEl.disabled = false;
+      buttonEl.innerHTML = "Запустить AutoCAD";
+    }
+    fetchDiagnostics();
+  }
+}
+
 root.addEventListener("click", (event) => {
+  const selectReportObject = event.target.closest("[data-select-report-object]");
+  if (selectReportObject) {
+    event.preventDefault();
+    const objectId = Number(selectReportObject.dataset.selectReportObject);
+    state.selectedReportObjectId = objectId;
+    state.loading = true;
+    render();
+    api.report(objectId).then((report) => {
+      state.completenessReport = report;
+      state.loading = false;
+      render();
+    }).catch((err) => {
+      state.error = err.message;
+      state.loading = false;
+      render();
+    });
+    return;
+  }
+
   const routeTarget = event.target.closest("[data-route]");
   if (routeTarget) {
     event.preventDefault();
@@ -1093,6 +1235,12 @@ root.addEventListener("click", (event) => {
       openCommandPalette();
     } else if (action === "close-command") {
       closeCommandPalette();
+    } else if (action === "open-diagnostics") {
+      fetchDiagnostics();
+    } else if (action === "refresh-diagnostics") {
+      fetchDiagnostics();
+    } else if (action === "launch-autocad") {
+      launchAutocadFromModal(actionTarget);
     } else if (action === "command-result") {
       openCommandSelection(Number(actionTarget.dataset.commandIndex));
     } else if (action === "toggle-theme") {
@@ -1158,6 +1306,8 @@ root.addEventListener("click", (event) => {
       archiveObject(Number(actionTarget.dataset.objectId));
     } else if (action === "restore-object") {
       restoreObject(Number(actionTarget.dataset.objectId));
+    } else if (action === "set-current-object") {
+      setCurrentObject(Number(actionTarget.dataset.objectId));
     } else if (action === "open-object-folder") {
       openObjectFolder(Number(actionTarget.dataset.objectId || state.workspace?.object?.id));
     } else if (action === "open-object-profile") {
@@ -1256,6 +1406,27 @@ root.addEventListener("click", (event) => {
         state.modalData = null;
       }
     }
+
+    const acCard = event.target.closest("[data-ac-card]");
+    if (acCard && !event.target.closest("[data-ac-exec]") && !event.target.closest("[data-ac-copy]")) {
+      const id = Number(acCard.dataset.acCard);
+      const skill = getAcSkillById(id);
+      if (skill) openSkillModal(skill);
+      return;
+    }
+
+    const acExec = event.target.closest("[data-ac-exec]");
+    if (acExec) {
+      executeSkill(Number(acExec.dataset.acExec), acExec.dataset.acTitle);
+      return;
+    }
+
+    const acCopy = event.target.closest("[data-ac-copy]");
+    if (acCopy) {
+      navigator.clipboard.writeText(acCopy.dataset.acCopy);
+      showAcToast(`Команда «${acCopy.dataset.acCopy}» скопирована`, "ok");
+      return;
+    }
     if (action !== "create-object") return;
   }
 
@@ -1310,6 +1481,9 @@ root.addEventListener("change", (event) => {
   }
   if (event.target.matches("#completionFilter")) {
     state.completionFilter = event.target.value || "all";
+  }
+  if (event.target.matches("#templateCategorySelect")) {
+    state.templateCategory = event.target.value || "all";
   }
   if (event.target.matches('#addTemplateToObjectForm [name="object_id"]')) {
     const objectId = Number(event.target.value);
@@ -1821,10 +1995,27 @@ async function loadApplication() {
     }
   }
   if (!editorLoaded) state.loading = false;
+  await recoverWorkspaceForCurrentRoute();
 }
 
 async function recoverWorkspaceForCurrentRoute() {
   const route = state.route;
+  if (route === "reports/completeness") {
+    const activeId = state.selectedReportObjectId || state.app?.activeObjectId || (state.objects?.[0]?.id) || null;
+    if (activeId && (!state.completenessReport || state.completenessReport.object_id !== activeId)) {
+      state.loading = true;
+      try {
+        state.completenessReport = await api.report(activeId);
+        state.selectedReportObjectId = activeId;
+      } catch (err) {
+        state.error = err.message;
+      } finally {
+        state.loading = false;
+        render();
+      }
+    }
+    return;
+  }
   if (!["object", "editor"].includes(route) || state.workspace?.object || state.loading || routeWorkspaceRecovery) return;
   const objectId = Number(state.app?.activeObjectId || state.objects.find((object) => object.is_current)?.id || 0);
   if (!objectId) return;
@@ -1960,3 +2151,4 @@ addEventListener("hashchange", () => queueMicrotask(recoverWorkspaceForCurrentRo
 addEventListener("popstate", () => queueMicrotask(recoverWorkspaceForCurrentRoute));
 render();
 loadApplication();
+initAutocadView(() => { if (state.route === "autocad") render(); }, state);

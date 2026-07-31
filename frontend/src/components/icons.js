@@ -36,7 +36,10 @@ import sunSvg from "lucide-static/icons/sun.svg?raw";
 import trashSvg from "lucide-static/icons/trash-2.svg?raw";
 import uploadSvg from "lucide-static/icons/upload.svg?raw";
 
+import houseSvg from "lucide-static/icons/house.svg?raw";
+
 const icons = {
+  home: houseSvg,
   objects: objectsSvg,
   templates: fileTextSvg,
   search: searchSvg,
@@ -73,8 +76,10 @@ const icons = {
   layers: layersSvg,
   server: serverSvg,
   history: historySvg,
+  play: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 3 20 12 6 21 6 3"/></svg>`,
   copy: copySvg,
   chartNoAxesColumn: chartNoAxesColumnSvg,
+  autocad: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22h16"/><path d="M12 2L4 18h16L12 2z"/><path d="M9 14h6"/></svg>`,
 };
 
 function escapeHtml(value) {

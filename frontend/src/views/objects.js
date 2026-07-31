@@ -23,19 +23,29 @@ function isBusy(state, action, objectId = null) {
     || (objectId !== null && (busyAction === `${action}:${objectId}` || busyAction === `${action}-${objectId}`));
 }
 
-function objectStatusBadge(object) {
+function objectStatusBadge(object, isCurrent) {
   const archived = normalizedStatus(object) === "archived";
+  if (isCurrent) {
+    return badge({
+      label: "Текущий активный",
+      tone: "primary",
+      iconName: "checkCircle",
+    });
+  }
   return badge({
     label: archived ? "В архиве" : "Активный",
     tone: archived ? "neutral" : "ready",
-    iconName: archived ? "archive" : "checkCircle",
+    iconName: archived ? "archive" : "circle",
   });
 }
 
 function renderObjectCard(object, state) {
+  const currentObjectId = Number(state.app?.activeObjectId || state.workspace?.object?.id || 0);
+  const isCurrent = Number(object.id) === currentObjectId;
   const archived = normalizedStatus(object) === "archived";
   const action = archived ? "restore-object" : "archive-object";
   const actionBusy = isBusy(state, action, object.id);
+  const setCurrentBusy = isBusy(state, "set-current-object", object.id);
   const documentsCount = Math.max(0, Number(object.documents_count) || 0);
   const presentCount = Math.min(documentsCount, Math.max(0, Number(object.present_files ?? object.present_count ?? object.files_count ?? object.ready_count) || 0));
   const readyCount = Math.min(documentsCount, Math.max(0, Number(object.ready_count) || 0));
@@ -43,17 +53,17 @@ function renderObjectCard(object, state) {
   const issues = Math.max(0, Number(object.issues_count) || 0);
   const title = object.short_name || object.name || "Объект без названия";
 
-  return `<article class="object-card" id="object-card-${escapeHtml(object.id)}" data-object-status="${archived ? "archived" : "active"}">
+  return `<article class="object-card${isCurrent ? " is-current" : ""}" id="object-card-${escapeHtml(object.id)}" data-object-status="${archived ? "archived" : "active"}">
     <button class="object-card__open" type="button" data-open-object="${escapeHtml(object.id)}" aria-label="Открыть объект ${escapeHtml(title)}">
       <span class="object-card__topline">
         <span class="object-card__code mono">${escapeHtml(object.code || "Без кода")}</span>
-        ${objectStatusBadge(object)}
+        ${objectStatusBadge(object, isCurrent)}
       </span>
       <span class="object-card__identity">
         <span class="object-card__mark" aria-hidden="true">${icon("building", 20)}</span>
         <span>
           <strong>${escapeHtml(title)}</strong>
-          <small>${escapeHtml(object.name && object.name !== title ? object.name : "Исполнительная документация объекта")}</small>
+          <small>${escapeHtml(object.name && object.name !== title ? object.name : "ID Vault объекта")}</small>
         </span>
         <span class="object-card__chevron" aria-hidden="true">${icon("chevronRight", 18)}</span>
       </span>
@@ -69,16 +79,27 @@ function renderObjectCard(object, state) {
       </span>
     </button>
     <footer class="object-card__footer">
-      <span>${escapeHtml(object.updated_label || (archived ? "Хранится в архиве" : "Доступен для работы"))}</span>
-      ${button({
-        label: archived ? "Восстановить" : "В архив",
-        action,
-        iconName: archived ? "restore" : "archive",
-        variant: "secondary",
-        size: "sm",
-        disabled: actionBusy,
-        attributes: `data-object-id="${escapeHtml(object.id)}" aria-busy="${actionBusy}"`,
-      })}
+      <span>${escapeHtml(object.updated_label || (archived ? "Хранится в архиве" : (isCurrent ? "Текущий объект в работе" : "Доступен для работы")))}</span>
+      <div style="display:flex; gap:8px;">
+        ${!archived && !isCurrent ? button({
+          label: "Сделать текущим",
+          action: "set-current-object",
+          iconName: "check",
+          variant: "secondary",
+          size: "sm",
+          disabled: setCurrentBusy,
+          attributes: `data-object-id="${escapeHtml(object.id)}" aria-busy="${setCurrentBusy}"`,
+        }) : ""}
+        ${button({
+          label: archived ? "Восстановить" : "В архив",
+          action,
+          iconName: archived ? "restore" : "archive",
+          variant: "secondary",
+          size: "sm",
+          disabled: actionBusy,
+          attributes: `data-object-id="${escapeHtml(object.id)}" aria-busy="${actionBusy}"`,
+        })}
+      </div>
     </footer>
   </article>`;
 }
@@ -142,9 +163,9 @@ export function renderObjectsView(state) {
   return `<section class="view-frame objects-view" data-view="objects">
     <header class="objects-header">
       <div>
-        <span class="technical-eyebrow">Локальный технический архив</span>
+        <span class="technical-eyebrow">ID Vault</span>
         <h1>Объекты</h1>
-        <p>Файлы исполнительной документации, структура групп и контроль комплектности.</p>
+        <p>Реестр объектов, структура групп и файлы документов.</p>
       </div>
       ${button({ label: "Добавить объект", action: "new-object", iconName: "plus", variant: "primary" })}
     </header>

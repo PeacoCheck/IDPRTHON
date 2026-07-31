@@ -228,10 +228,52 @@ function objectsBarConfig(payload, tokens) {
   };
 }
 
+function sectionsDoughnutConfig(payload, tokens) {
+  const labels = Array.isArray(payload.labels) ? payload.labels.map(String) : [];
+  const values = Array.isArray(payload.values) ? payload.values.map(nonNegative) : [];
+  const colors = Array.isArray(payload.colors) ? payload.colors.map(String) : [];
+  const completeness = Array.isArray(payload.completeness) ? payload.completeness.map(boundedPercent) : [];
+  const present = Array.isArray(payload.present) ? payload.present.map(nonNegative) : [];
+  const totals = Array.isArray(payload.totals) ? payload.totals.map(nonNegative) : [];
+
+  return {
+    type: "doughnut",
+    data: {
+      labels,
+      datasets: [{
+        data: values.length ? values : [1],
+        backgroundColor: colors.length ? colors : [tokens.surfaceStrong],
+        hoverBackgroundColor: colors.length ? colors : [tokens.surfaceStrong],
+        borderWidth: 2,
+        borderColor: tokens.surface,
+      }],
+    },
+    options: {
+      ...baseOptions(tokens),
+      cutout: "68%",
+      plugins: {
+        legend: { display: false },
+        tooltip: tooltipOptions(tokens, {
+          label: (context) => {
+            const index = context.dataIndex;
+            if (!values.length) return "Нет документов в разделах";
+            return [
+              `Раздел: ${context.label}`,
+              `Готовность: ${completeness[index] || 0}%`,
+              `Файлы: ${present[index] || 0} из ${totals[index] || 0}`,
+            ];
+          },
+        }),
+      },
+    },
+  };
+}
+
 function configFor(kind, payload, tokens) {
   if (kind === "object-doughnut") return doughnutConfig(payload, tokens);
   if (kind === "groups-bar") return groupsBarConfig(payload, tokens);
   if (kind === "objects-bar") return objectsBarConfig(payload, tokens);
+  if (kind === "sections-doughnut") return sectionsDoughnutConfig(payload, tokens);
   return null;
 }
 

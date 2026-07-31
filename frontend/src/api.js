@@ -169,7 +169,7 @@ export const api = {
     ),
   presets: (q = "") => request(`/api/presets${queryString({ q })}`, {}, "Не удалось загрузить пресеты"),
   catalog: (name) => request(`/api/catalogs/${encodeURIComponent(name)}`, {}, "Не удалось загрузить каталог"),
-  report: () => request("/api/reports/completeness", {}, "Не удалось загрузить отчёт о комплектности"),
+  report: (objectId = null) => request(`/api/reports/completeness${queryString({ object_id: objectId })}`, {}, "Не удалось загрузить отчёт о комплектности"),
   waiveIntegrity: (objectId, ruleId, payload) =>
     request(
       `/api/objects/${objectId}/integrity/${ruleId}/waive`,

@@ -1,9 +1,9 @@
 import { state } from "./store.js";
 
-const known = new Set(["objects", "object", "editor", "templates", "reports/completeness"]);
+const known = new Set(["home", "objects", "object", "editor", "templates", "reports/completeness", "autocad"]);
 
 export function navigate(route, options = {}) {
-  const clean = known.has(route) ? route : "objects";
+  const clean = known.has(route) ? route : "home";
   state.route = clean;
   if (options.document) {
     state.selectedDocument = options.document;
@@ -16,12 +16,12 @@ export function navigate(route, options = {}) {
 
 export function initRouter() {
   const sync = () => {
-    const parts = (location.hash.replace("#/", "") || "objects").split("/");
+    const parts = (location.hash.replace("#/", "") || "home").split("/");
     const route = parts[0] === "reports" && parts[1] === "completeness"
       ? "reports/completeness"
-      : parts[0] || "objects";
+      : parts[0] || "home";
     const rawDocumentId = route === "editor" ? parts[1] : null;
-    const clean = known.has(route) ? route : "objects";
+    const clean = known.has(route) ? route : "home";
     state.route = clean;
     if (clean === "editor") {
       const documentId = Number(rawDocumentId) || null;

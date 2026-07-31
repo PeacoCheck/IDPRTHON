@@ -1962,9 +1962,14 @@ def global_search(q: str = Query(min_length=2)) -> dict:
 
 
 @router.get("/reports/completeness")
-def completeness_report() -> dict:
+def completeness_report(object_id: int | None = None) -> dict:
     with SessionLocal() as db:
-        obj = current_object(db)
+        if object_id is not None:
+            obj = db.get(ObjectRecord, object_id)
+            if not obj:
+                raise HTTPException(status_code=404, detail="Объект не найден")
+        else:
+            obj = current_object(db)
         docs = db.scalars(select(Document).where(Document.object_id == obj.id)).all()
         total = len(docs)
         ready = sum(document_is_ready(item) for item in docs)

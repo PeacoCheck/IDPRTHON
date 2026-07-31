@@ -113,7 +113,7 @@ function renderTemplateCard(state, template) {
         ${file.hasFile ? `<a class="icon-button" href="${templateDownloadUrl(template.id)}" download aria-label="Скачать шаблон">${icon("download", 17)}</a>` : ""}
         ${file.hasFile ? iconButton({ label: "Заменить файл", action: "replace-template", iconName: "refresh", disabled: replacing, attributes: `data-template-id="${templateId}" aria-busy="${replacing}"` }) : ""}
         ${iconButton({ label: "Дублировать шаблон", action: "duplicate-template", iconName: "copy", attributes: `data-template-id="${escapeHtml(template.id)}"` })}
-        ${iconButton({ label: "В архив", action: "archive-template", iconName: "archive", attributes: `data-template-id="${escapeHtml(template.id)}"` })}
+        ${iconButton({ label: "Удалить шаблон", action: "archive-template", iconName: "trash", attributes: `data-template-id="${escapeHtml(template.id)}"` })}
       </div>
       ${file.hasFile ? addButton : `<span class="template-add-disabled" data-tooltip="Сначала загрузите файл шаблона" tabindex="0" aria-label="Добавить в объект недоступно: сначала загрузите файл шаблона">${addButton}</span>`}
     </footer>
@@ -153,7 +153,7 @@ export function renderTemplatesView(state) {
     <header class="templates-header"><div><span class="technical-eyebrow">Файловая библиотека</span><h1>Шаблоны документов</h1><p>Готовые оригиналы — скачать, заменить или скопировать в архив объекта.</p></div>${button({ label: "Добавить шаблон", action: "new-template", iconName: "upload", variant: "primary" })}</header>
     <div class="templates-toolbar">
       <label class="templates-search" for="templateSearch">${icon("search", 16)}<span class="sr-only">Найти шаблон</span><input id="templateSearch" class="control" type="search" value="${escapeHtml(state.templateQuery || "")}" placeholder="Название или имя файла" autocomplete="off"></label>
-      <div class="templates-categories" role="tablist" aria-label="Типы шаблонов"><button class="templates-category${category === "all" ? " is-active" : ""}" type="button" role="tab" aria-selected="${category === "all"}" data-action="filter-templates" data-template-category="all">Все <span class="tabular">${templates.length}</span></button>${categories.map((value) => `<button class="templates-category${category === value ? " is-active" : ""}" type="button" role="tab" aria-selected="${category === value}" data-action="filter-templates" data-template-category="${escapeHtml(value)}">${escapeHtml(docTypeLabel(value))}<span class="tabular">${templates.filter((item) => item.doc_type === value).length}</span></button>`).join("")}</div>
+      <select class="select" id="templateCategorySelect" style="max-width:240px; cursor:pointer;"><option value="all" ${category === "all" ? "selected" : ""}>Все типы (${templates.length})</option>${categories.map((value) => `<option value="${escapeHtml(value)}" ${category === value ? "selected" : ""}>${escapeHtml(docTypeLabel(value))} (${templates.filter((item) => item.doc_type === value).length})</option>`).join("")}</select>
       <span class="templates-result"><strong class="tabular">${visible.length}</strong> шаблонов</span>
     </div>
     ${content}
@@ -213,7 +213,7 @@ function renderArchiveTemplateModal(state) {
   const template = templateById(state, state.modalData?.templateId);
   if (!template) return "";
   const archiving = isBusy(state, "archive-template", template.id);
-  return modal({ title: "Убрать шаблон в архив?", description: "Он исчезнет из библиотеки, но связанные документы объектов сохранятся.", body: `<div class="archive-template-confirm"><span>${icon("archive", 22)}</span><div><strong>${escapeHtml(template.title)}</strong><small>Версия ${escapeHtml(template.version || 1)}</small></div></div>`, footer: `${button({ label: "Отмена", action: "close-modal", variant: "secondary", disabled: archiving })}${button({ label: "В архив", action: "confirm-archive-template", iconName: "archive", variant: "danger", disabled: archiving, attributes: `data-template-id="${escapeHtml(template.id)}" aria-busy="${archiving}"` })}`, size: "sm", labelledBy: "archiveTemplateModalTitle" });
+  return modal({ title: "Удалить шаблон?", description: "Он будет удалён из библиотеки шаблонов.", body: `<div class="archive-template-confirm"><span>${icon("trash", 22)}</span><div><strong>${escapeHtml(template.title)}</strong><small>Версия ${escapeHtml(template.version || 1)}</small></div></div>`, footer: `${button({ label: "Отмена", action: "close-modal", variant: "secondary", disabled: archiving })}${button({ label: "Удалить шаблон", action: "confirm-archive-template", iconName: "trash", variant: "danger", disabled: archiving, attributes: `data-template-id="${escapeHtml(template.id)}" aria-busy="${archiving}"` })}`, size: "sm", labelledBy: "archiveTemplateModalTitle" });
 }
 
 export function renderTemplateModal(state) {
