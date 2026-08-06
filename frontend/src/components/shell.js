@@ -13,7 +13,10 @@ const routeTitles = {
 
 function railLink(route, label, iconName, activeRoute) {
   const active = activeRoute === route || (route === "objects" && ["object", "editor"].includes(activeRoute));
-  return `<a class="rail__button${active ? " is-active" : ""}" href="#/${route}" data-route="${route}" aria-label="${label}" title="${label}"${active ? ' aria-current="page"' : ""}>${icon(iconName)}</a>`;
+  return `<a class="rail__button${active ? " is-active" : ""}" href="#/${route}" data-route="${route}" aria-label="${label}" title="${label}"${active ? ' aria-current="page"' : ""}>
+    ${icon(iconName)}
+    <span class="rail__label">${escapeHtml(label)}</span>
+  </a>`;
 }
 
 export function shell(state, content, { actions = "" } = {}) {

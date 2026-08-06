@@ -966,7 +966,9 @@ def object_workspace(object_id: int) -> dict:
         if not obj:
             raise HTTPException(404, "Объект не найден")
         groups = db.scalars(select(ObjectGroup).where(ObjectGroup.object_id == obj.id).order_by(ObjectGroup.sort_order)).all()
-        documents = db.scalars(select(Document).where(Document.object_id == obj.id).order_by(Document.updated_at.desc())).all()
+        # Keep registry order stable. Editing or importing a later file must not
+        # reshuffle an established object register.
+        documents = db.scalars(select(Document).where(Document.object_id == obj.id).order_by(Document.created_at, Document.id)).all()
         document_map: dict[int | None, list[Document]] = {}
         for document in documents:
             document_map.setdefault(document.group_id, []).append(document)
@@ -1113,7 +1115,7 @@ def list_documents(object_id: int | None = None, q: str = ""):
         query = select(Document).where(Document.object_id == oid)
         if q:
             query = query.where(or_(Document.number.ilike(f"%{q}%"), Document.work_title.ilike(f"%{q}%")))
-        documents = db.scalars(query.order_by(Document.id.desc())).all()
+        documents = db.scalars(query.order_by(Document.created_at, Document.id)).all()
         return serialize_documents_for_read(db, documents)
 
 

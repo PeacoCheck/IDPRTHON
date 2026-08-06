@@ -2,18 +2,43 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 from pathlib import Path
+import subprocess
 
 import httpx
 from fastapi import FastAPI, Request
-from fastapi.responses import FileResponse, Response, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from .api import router
 from .config import settings
 from .db import create_schema
+from .routers.import_router import import_router
 from .seed import seed_database
 
 AUTOCAD_SERVICE_URL = "http://127.0.0.1:8770"
+
+
+def local_autocad_diagnostics() -> dict:
+    """Useful fallback while the optional COM bridge is not running."""
+    tasklist = subprocess.run(
+        ["tasklist", "/FI", "IMAGENAME eq acad.exe", "/FO", "CSV", "/NH"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+    )
+    process_running = "acad.exe" in tasklist.stdout.lower()
+    return {
+        "connected": False,
+        "status": {"connected": False, "message": "COM-мост AutoCAD не запущен"},
+        "checks": [
+            {"id": "acad_process", "label": "Процесс AutoCAD (acad.exe)", "ok": process_running, "detail": "AutoCAD запущен" if process_running else "acad.exe не найден"},
+            {"id": "bridge", "label": "Локальный AutoCAD-сервис", "ok": False, "detail": "Сервис на 127.0.0.1:8770 не отвечает"},
+            {"id": "com_conn", "label": "COM-подключение", "ok": False, "detail": "Проверка будет доступна после запуска AutoCAD-сервиса"},
+        ],
+    }
 
 
 @asynccontextmanager
@@ -25,6 +50,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(title="ID Vault API", version="0.2.0", lifespan=lifespan)
 app.include_router(router)
+app.include_router(import_router)
 
 assets = settings.frontend_dir / "assets"
 if assets.exists():
@@ -54,6 +80,8 @@ async def autocad_proxy(path: str, request: Request):
             media_type=resp.headers.get("content-type", "application/json"),
         )
     except httpx.ConnectError:
+        if path == "diagnostics" and request.method == "GET":
+            return JSONResponse(local_autocad_diagnostics())
         return Response(
             content=b'{"detail":"AutoCAD service offline","connected":false}',
             status_code=503,

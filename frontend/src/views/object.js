@@ -7,7 +7,7 @@ import {
   previewUrl,
   renderFilePreview,
 } from "../components/file-preview.js";
-import { badge, button, emptyState, escapeHtml, iconButton, modal, skeleton } from "../components/ui.js";
+import { badge, button, emptyState, escapeHtml, iconButton, modal, skeleton, tooltip } from "../components/ui.js";
 
 const numberFormat = new Intl.NumberFormat("ru-RU");
 
@@ -116,7 +116,7 @@ function renderHeader(state, object) {
       ${iconButton({ label: "Открыть папку объекта", action: "open-object-folder", iconName: "folderOpen", disabled: openingFolder, attributes: `data-object-id="${objectId}" aria-busy="${openingFolder}"` })}
       ${iconButton({ label: "Карточка объекта", action: "open-object-profile", iconName: "edit", attributes: `data-object-id="${objectId}"` })}
       ${button({ label: "Ожидаемый документ", action: "open-new-document", iconName: "plus", variant: "secondary", attributes: `data-object-id="${objectId}"` })}
-      ${button({ label: "Добавить файлы", action: "open-import-document", iconName: "upload", variant: "primary", attributes: `data-object-id="${objectId}"` })}
+      <a href="#/objects/${objectId}/import" class="button button--primary">${icon("upload", 16)}<span class="button__label">Добавить файлы</span></a>
       ${iconButton({ label: object.status === "archived" ? "Восстановить объект" : "Архивировать объект", action: object.status === "archived" ? "restore-object" : "archive-object", iconName: object.status === "archived" ? "restore" : "archive", attributes: `data-object-id="${objectId}"` })}
     </div>
   </header>`;
@@ -135,6 +135,75 @@ function integrityNumbers(workspace, documents) {
   return { total, satisfied, missing: Math.max(0, total - satisfied), present, ready, revision, score };
 }
 
+function renderNextActionsBlock(values, documents) {
+  const missingFilesCount = documents.filter((doc) => !hasFile(doc)).length;
+  const needsRevisionCount = values.revision;
+  const missingExclusionsCount = Math.max(0, values.missing - missingFilesCount);
+  const totalActions = missingFilesCount + needsRevisionCount + missingExclusionsCount;
+
+  if (totalActions === 0) {
+    return `<section class="next-actions-board is-complete" aria-label="Очередь действий по объекту">
+      <div class="next-actions-header">
+        <div>
+          <span class="technical-eyebrow">Очередь задач</span>
+          <h2>Исполнительная документация готова на 100%</h2>
+          <p>Все обязательные требования закрыты файлами или подтверждёнными исключениями.</p>
+        </div>
+        ${badge({ label: "Завершено", tone: "ready", iconName: "checkCircle" })}
+      </div>
+    </section>`;
+  }
+
+  return `<section class="next-actions-board" aria-label="Очередь действий по объекту">
+    <div class="next-actions-header">
+      <div>
+        <span class="technical-eyebrow">До готовности комплекта</span>
+        <h2>${totalActions} ${totalActions === 1 ? "действие" : totalActions < 5 ? "действия" : "действий"}</h2>
+      </div>
+    </div>
+    <div class="next-actions-list">
+      ${missingFilesCount > 0 ? `
+        <div class="next-action-item">
+          <span class="next-action-item__count">${missingFilesCount}</span>
+          <div class="next-action-item__text">
+            <strong>Загрузить отсутствующие файлы</strong>
+            <small>Позиции без прикреплённого оригинала или копии документа</small>
+          </div>
+          <button type="button" class="button button--secondary button--sm" data-action="filter-object-completion" data-completion-filter="no_file">
+            Открыть ${icon("arrowRight", 14)}
+          </button>
+        </div>
+      ` : ""}
+
+      ${needsRevisionCount > 0 ? `
+        <div class="next-action-item">
+          <span class="next-action-item__count">${needsRevisionCount}</span>
+          <div class="next-action-item__text">
+            <strong>Документы требуют правок</strong>
+            <small>Отправлены на доработку или исправление замечаний</small>
+          </div>
+          <button type="button" class="button button--secondary button--sm" data-action="filter-object-completion" data-completion-filter="needs_revision">
+            Открыть ${icon("arrowRight", 14)}
+          </button>
+        </div>
+      ` : ""}
+
+      ${missingExclusionsCount > 0 ? `
+        <div class="next-action-item">
+          <span class="next-action-item__count">${missingExclusionsCount}</span>
+          <div class="next-action-item__text">
+            <strong>Указать основание для исключения</strong>
+            <small>Недостающие требования нуждаются в обоснованном письме/акте</small>
+          </div>
+          <button type="button" class="button button--secondary button--sm" data-action="set-object-tab" data-object-tab="integrity">
+            Открыть ${icon("arrowRight", 14)}
+          </button>
+        </div>
+      ` : ""}
+    </div>
+  </section>`;
+}
+
 function renderCompletenessBoard(state, workspace, documents) {
   const values = integrityNumbers(workspace, documents);
   const objectId = workspace.object?.id || "current";
@@ -144,42 +213,46 @@ function renderCompletenessBoard(state, workspace, documents) {
   const completenessTitle = !values.total
     ? "Требования не заданы"
     : values.missing
-      ? `Не хватает ${values.missing}`
-      : "Структура собрана";
-  return `<section class="completeness-board" aria-label="Комплектность объекта">
-    <div class="object-completeness-stamp" ${progressAttributes}>
-      ${renderChartCanvas({
-        id: `chart-object-completeness-${objectId}`,
-        kind: "object-doughnut",
-        payload: { satisfied: values.satisfied, total: values.total },
-        className: "object-completeness-stamp__chart",
-      })}
-      <div class="object-completeness-stamp__label">
-        <span>КОМПЛЕКТ</span>
-        <strong class="tabular">${numberFormat.format(values.satisfied)}<i>/</i>${numberFormat.format(values.total)}</strong>
-        <small>${values.total ? `${values.score}% собрано` : "Нет требований"}</small>
+      ? `Незакрытые требования: ${values.missing}`
+      : "Соответствие эталону: 100%";
+  return `
+    ${renderNextActionsBlock(values, documents)}
+
+    <section class="completeness-board" aria-label="Комплектность объекта">
+      <div class="object-completeness-stamp" ${progressAttributes}>
+        ${renderChartCanvas({
+          id: `chart-object-completeness-${objectId}`,
+          kind: "object-doughnut",
+          payload: { satisfied: values.satisfied, total: values.total },
+          className: "object-completeness-stamp__chart",
+        })}
+        <div class="object-completeness-stamp__label">
+          <span>ЭТАЛОН</span>
+          <strong class="tabular">${numberFormat.format(values.satisfied)}<i>/</i>${numberFormat.format(values.total)}</strong>
+          <small>${values.total ? `${values.score}% собрано` : "Нет требований"}</small>
+        </div>
       </div>
-    </div>
-    <div class="completeness-board__body">
-      <div class="completeness-board__heading">
-        <div><span class="technical-eyebrow">Контроль архива</span><h2>${completenessTitle}</h2></div>
-        <button type="button" class="text-action" data-action="set-object-tab" data-object-tab="integrity">Открыть проверку ${icon("arrowRight", 15)}</button>
+      <div class="completeness-board__body">
+        <div class="completeness-board__heading">
+          <div><span class="technical-eyebrow">Контроль комплектности</span><h2>${completenessTitle}</h2></div>
+          <button type="button" class="text-action" data-action="set-object-tab" data-object-tab="integrity">Открыть детальную проверку ${icon("arrowRight", 15)}</button>
+        </div>
+        <div class="completeness-metrics">
+          <div><span>${icon("file", 16)}</span><strong class="tabular">${values.present} / ${documents.length}</strong><small>Файлы в архиве</small></div>
+          <div><span>${icon("checkCircle", 16)}</span><strong class="tabular">${values.ready}</strong><small>Рабочий статус «Готов»</small></div>
+          <div class="${values.missing ? "is-warning" : ""}"><span>${icon("alertTriangle", 16)}</span><strong class="tabular">${values.missing}</strong><small>Незакрытые требования</small></div>
+          <div><span>${icon("award", 16)}</span><strong class="tabular">${values.score}% ${tooltip({ text: "Какая часть обязательных требований закрыта файлом или обоснованным исключением; статус “Готов” учитывается отдельно" })}</strong><small>Соответствие эталону</small></div>
+        </div>
       </div>
-      <div class="completeness-metrics">
-        <div><span>${icon("file", 16)}</span><strong class="tabular">${values.present}</strong><small>файлов на месте</small></div>
-        <div><span>${icon("checkCircle", 16)}</span><strong class="tabular">${values.ready}</strong><small>помечено готовыми</small></div>
-        <div class="${values.revision ? "is-warning" : ""}"><span>${icon("edit", 16)}</span><strong class="tabular">${values.revision}</strong><small>на правках</small></div>
-      </div>
-    </div>
-  </section>`;
+    </section>`;
 }
 
 function renderTabs(state, workspace, documents) {
   const tab = state.objectTab === "integrity" ? "integrity" : "registry";
   const issues = Number(workspace.integrity?.issues) || integrityNumbers(workspace, documents).missing;
   return `<div class="object-tabs tabs" role="tablist" aria-label="Разделы объекта">
-    <button class="tabs__button${tab === "registry" ? " is-active" : ""}" type="button" role="tab" aria-selected="${tab === "registry"}" data-action="set-object-tab" data-object-tab="registry">Реестр <span class="tabular">${numberFormat.format(documents.length)}</span></button>
-    <button class="tabs__button${tab === "integrity" ? " is-active" : ""}" type="button" role="tab" aria-selected="${tab === "integrity"}" data-action="set-object-tab" data-object-tab="integrity">Проверка комплекта <span class="tabular">${numberFormat.format(issues)}</span></button>
+    <button class="tabs__button${tab === "registry" ? " is-active" : ""}" type="button" role="tab" aria-selected="${tab === "registry"}" aria-controls="objectRegistry" id="tab-registry" data-action="set-object-tab" data-object-tab="registry">Реестр <span class="tabular">${numberFormat.format(documents.length)}</span></button>
+    <button class="tabs__button${tab === "integrity" ? " is-active" : ""}" type="button" role="tab" aria-selected="${tab === "integrity"}" aria-controls="objectIntegrity" id="tab-integrity" data-action="set-object-tab" data-object-tab="integrity">Проверка комплекта <span class="tabular">${numberFormat.format(issues)}</span></button>
   </div>`;
 }
 
@@ -267,7 +340,7 @@ function renderDocumentRow(document, state) {
   const file = documentFileInfo(document);
   const extension = file.extension ? file.extension.toLocaleUpperCase("ru-RU").slice(0, 4) : "ОЖИД.";
   const selected = Number(state.previewDocumentId) === Number(document.id);
-  return `<article class="archive-document${selected ? " is-selected" : ""}${file.hasFile ? "" : " is-expected"}" id="document-row-${escapeHtml(document.id)}" tabindex="0" data-document="${escapeHtml(document.id)}" aria-label="Открыть ${escapeHtml(document.title || file.fileName)}">
+  return `<a href="#/objects/${state.workspace?.object?.id || "current"}/documents/${document.id}" class="archive-document${selected ? " is-selected" : ""}${file.hasFile ? "" : " is-expected"}" id="document-row-${escapeHtml(document.id)}" data-document="${escapeHtml(document.id)}" aria-label="Открыть ${escapeHtml(document.title || file.fileName)}">
     <span class="archive-document__filemark mono" aria-hidden="true">${escapeHtml(extension)}</span>
     <div class="archive-document__identity">
       <span class="archive-document__number mono">${escapeHtml(document.number || `ID-${document.id}`)}</span>
@@ -282,7 +355,7 @@ function renderDocumentRow(document, state) {
       ${iconButton({ label: "Убрать из реестра", action: "delete-document", iconName: "trash", attributes: `data-document-id="${escapeHtml(document.id)}"` })}
       <span class="archive-document__open">${icon("chevronRight", 17)}</span>
     </div>
-  </article>`;
+  </a>`;
 }
 
 function renderRegistry(state, workspace, documents) {
@@ -311,7 +384,7 @@ function renderRegistry(state, workspace, documents) {
     content = `<div class="archive-document-list" data-auto-animate="documents">${visible.map((document) => renderDocumentRow(document, state)).join("")}</div>`;
   }
 
-  return `<section class="archive-workspace" id="objectRegistry" role="tabpanel">
+  return `<section class="archive-workspace" id="objectRegistry" role="tabpanel" aria-labelledby="tab-registry">
     ${renderGroups(state, workspace, documents)}
     <div class="archive-registry" data-object-drop data-object-id="${escapeHtml(workspace.object.id)}">
       <header class="archive-registry__toolbar">
@@ -347,7 +420,7 @@ function renderIntegrityCheck(state, check) {
 function renderIntegrity(state, workspace, documents) {
   const checks = Array.isArray(workspace.integrity?.checks) ? workspace.integrity.checks : [];
   const numbers = integrityNumbers(workspace, documents);
-  return `<section class="object-integrity" id="objectIntegrity" role="tabpanel">
+  return `<section class="object-integrity" id="objectIntegrity" role="tabpanel" aria-labelledby="tab-integrity">
     <header class="integrity-heading"><div><span class="technical-eyebrow">Эталонная структура</span><h2>${numbers.missing ? "Есть разрывы в комплекте" : "Комплект соответствует структуре"}</h2><p>Файл на месте закрывает требование. Рабочий статус документа учитывается отдельно.</p></div><div class="integrity-heading__stamp"><strong class="tabular">${numbers.satisfied}/${numbers.total}</strong><span>${numbers.score}%</span></div></header>
     <div class="integrity-list" data-auto-animate="integrity">${checks.length ? checks.map((check) => renderIntegrityCheck(state, check)).join("") : emptyState({ iconName: "checkCircle", title: "Правила структуры не заданы", description: "Добавленные файлы остаются в реестре, но эталонный комплект для этого профиля пока не настроен." })}</div>
   </section>`;

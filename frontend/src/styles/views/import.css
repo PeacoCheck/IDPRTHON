@@ -1,0 +1,70 @@
+.import-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl);
+  padding-bottom: var(--space-4xl);
+}
+
+.import-standalone-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xl);
+  max-width: 960px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.import-standalone-form .object-file-field {
+  background: var(--surface-2);
+  border: 2px dashed var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--space-3xl) var(--space-xl);
+  text-align: center;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.import-standalone-form .object-file-field:hover,
+.import-standalone-form .object-file-field:focus-within {
+  border-color: var(--primary);
+  background: var(--surface-3);
+}
+
+.import-standalone-form .object-file-field svg {
+  color: var(--text-muted);
+  width: 48px;
+  height: 48px;
+  transition: color 0.2s ease;
+}
+
+.import-standalone-form .object-file-field:hover svg {
+  color: var(--primary);
+}
+
+.import-standalone-form .object-file-field span {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.import-standalone-form .object-file-field strong {
+  font-size: 1.125rem;
+  font-weight: 500;
+  color: var(--text-main);
+}
+
+.import-standalone-form .object-file-field small {
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
+
+.import-form-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: var(--space-xl);
+  border-top: 1px solid var(--border-subtle);
+}

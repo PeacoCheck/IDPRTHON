@@ -18,6 +18,8 @@ import "./styles/command.css";
 import "./styles/table.css";
 import "./styles/views/objects.css";
 import "./styles/views/object.css";
+import "./styles/views/home.css";
+import "./styles/views/import.css";
 import "./styles/views/editor.css";
 import "./styles/views/templates.css";
 import "./styles/views/reports.css";
@@ -27,6 +29,7 @@ import "./styles/utilities.css";
 import autoAnimate from "@formkit/auto-animate";
 import { Idiomorph } from "idiomorph";
 import { api } from "./api.js";
+import { renderBulkMatchingTable } from "./components/bulk-import.js";
 import { beforeChartNodeMorphed, destroyChartsWithin, hydrateCharts } from "./components/charts.js";
 import { renderCommandPalette } from "./components/command.js";
 import { documentFileInfo, hydrateFilePreviews } from "./components/file-preview.js";
@@ -88,10 +91,24 @@ function pendingView() {
   });
 }
 
+function objectNotFoundView() {
+  return emptyState({
+    iconName: "alertTriangle",
+    title: "Объект не найден",
+    description: "Запрошенный объект с таким идентификатором не существует или был удалён.",
+    action: button({ label: "К списку объектов", action: "go-objects", variant: "primary" }),
+  });
+}
+
 function routeView() {
   if (state.route === "home") return renderHomeView(state);
   if (state.route === "objects") return renderObjectsView(state);
-  if (state.route === "object") return renderObjectView(state);
+  if (state.route === "object") {
+    if (state.error && !state.workspace?.object) {
+      return objectNotFoundView();
+    }
+    return renderObjectView(state);
+  }
   if (state.route === "editor") return renderEditorView(state);
   if (state.route === "templates") return renderTemplatesView(state);
   if (state.route === "reports/completeness") return renderReportsCompletenessView(state);
@@ -1452,14 +1469,33 @@ root.addEventListener("input", (event) => {
   if (event.target.matches('#importDocumentForm input[type="file"]')) {
     const files = [...(event.target.files || [])];
     const label = event.target.closest(".object-file-field")?.querySelector("strong");
-    if (label) label.textContent = files.length ? `${files.length} ${files.length === 1 ? "файл" : "файла"}` : "Выберите один или несколько файлов";
+    if (label) label.textContent = files.length ? `${files.length} ${files.length === 1 ? "файл выбран" : "файлов выбрано"}` : "Выберите один или несколько файлов";
     const list = event.target.form?.querySelector("[data-import-file-list]");
     if (list) {
-      list.replaceChildren(...files.map((file) => {
-        const row = document.createElement("span");
-        row.textContent = `${file.name} · ${Math.max(1, Math.round(file.size / 1024))} КБ`;
-        return row;
-      }));
+      const groups = state.workspace?.groups || [];
+      const documents = state.documents || [];
+      list.innerHTML = renderBulkMatchingTable(files, groups, documents);
+    }
+  }
+  if (event.target.matches("#bulkSelectAll")) {
+    const checked = event.target.checked;
+    const form = event.target.closest("form");
+    if (form) {
+      form.querySelectorAll(".bulk-file-select").forEach((cb) => (cb.checked = checked));
+    }
+  }
+  if (event.target.matches("#bulkApplyGroup")) {
+    const groupId = event.target.value;
+    if (groupId) {
+      const form = event.target.closest("form");
+      if (form) {
+        form.querySelectorAll(".bulk-file-select").forEach((cb, index) => {
+          if (cb.checked) {
+            const groupSelect = form.querySelector(`select[name="group_id_${index}"]`);
+            if (groupSelect) groupSelect.value = groupId;
+          }
+        });
+      }
     }
   }
   if (event.target.matches('#newTemplateFileForm input[type="file"], #replaceTemplateFileForm input[type="file"]')) {
@@ -1653,17 +1689,27 @@ async function createGroupFromForm(form) {
 async function importDocumentFromForm(form) {
   const objectId = state.workspace?.object?.id;
   const formData = new FormData(form);
-  const files = formData.getAll("files").filter((file) => file instanceof File && file.name);
-  if (!objectId || !files.length) {
+  const rawFiles = formData.getAll("files").filter((file) => file instanceof File && file.name);
+  if (!objectId || !rawFiles.length) {
     notify("Выберите хотя бы один файл", "error");
     return;
   }
   await runFormAction(form, async () => {
     let imported = 0;
     const failed = [];
-    for (const file of files) {
+    for (let index = 0; index < rawFiles.length; index += 1) {
+      const file = rawFiles[index];
+      const selected = formData.has(`file_selected_${index}`) || rawFiles.length === 1;
+      if (!selected) continue;
+
+      const matchedGroupId = optionalNumber(formData.get(`group_id_${index}`) || formData.get("group_id"));
+      const matchedStatus = formData.get(`status_${index}`);
+
       try {
-        await api.importFile(objectId, file, optionalNumber(formData.get("group_id")));
+        const resultDoc = await api.importFile(objectId, file, matchedGroupId);
+        if (resultDoc && resultDoc.id && matchedStatus && matchedStatus !== "completed") {
+          await api.updateDocument(resultDoc.id, { completion_status: matchedStatus });
+        }
         imported += 1;
       } catch (error) {
         failed.push(`${file.name}: ${error.message}`);
@@ -2016,8 +2062,8 @@ async function recoverWorkspaceForCurrentRoute() {
     }
     return;
   }
-  if (!["object", "editor"].includes(route) || state.workspace?.object || state.loading || routeWorkspaceRecovery) return;
-  const objectId = Number(state.app?.activeObjectId || state.objects.find((object) => object.is_current)?.id || 0);
+  if (!["object", "editor"].includes(route) || (state.workspace?.object && state.workspace.object.id === state.selectedObjectId) || state.loading || routeWorkspaceRecovery) return;
+  const objectId = Number(state.selectedObjectId || state.app?.activeObjectId || state.objects.find((object) => object.is_current)?.id || 0);
   if (!objectId) return;
   routeWorkspaceRecovery = (async () => {
     state.loading = true;
@@ -2133,6 +2179,12 @@ document.addEventListener("keydown", (event) => {
   }
   if (event.key === "Escape" && state.previewDocumentId) {
     closeDocumentPreview();
+    return;
+  }
+  if ((event.key === "Enter" || event.key === " ") && event.target.matches("[data-document]") && !event.target.closest("[data-action]")) {
+    event.preventDefault();
+    const docId = Number(event.target.dataset.document);
+    if (docId) openDocumentPreview(docId);
     return;
   }
   if (event.key === "/" && !state.modal && !event.ctrlKey && !event.metaKey && !event.altKey) {

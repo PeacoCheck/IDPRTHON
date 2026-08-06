@@ -96,15 +96,15 @@ function doughnutConfig(payload, tokens) {
       labels: ["Выполнено", "Осталось"],
       datasets: [{
         data: total ? [satisfied, missing] : [0, 1],
-        backgroundColor: total ? [tokens.ready, tokens.surfaceStrong] : [tokens.surfaceStrong],
-        hoverBackgroundColor: total ? [tokens.accentDecorative, tokens.surfaceStrong] : [tokens.surfaceStrong],
+        backgroundColor: total ? [tokens.ready, tokens.borderStrong] : [tokens.borderStrong],
+        hoverBackgroundColor: total ? [tokens.accentDecorative, tokens.borderStrong] : [tokens.borderStrong],
         borderWidth: 0,
         spacing: 0,
       }],
     },
     options: {
       ...baseOptions(tokens),
-      cutout: "76%",
+      cutout: "84%",
       plugins: {
         legend: { display: false },
         tooltip: tooltipOptions(tokens, {

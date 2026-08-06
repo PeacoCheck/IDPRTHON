@@ -22,6 +22,8 @@
   justify-items: center;
   border-right: 1px solid var(--border);
   background: var(--surface);
+  overflow: hidden;
+  transition: width 0.2s ease, box-shadow 0.2s ease;
 }
 
 .rail__brand {
@@ -55,16 +57,41 @@
 }
 
 .rail__button {
-  display: grid;
-  width: 36px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: auto;
+  min-width: 36px;
   height: 36px;
-  padding: 0;
-  place-items: center;
+  padding: 0 9px;
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-faint);
+  text-decoration: none;
   transition: var(--transition-hover);
+}
+
+.rail__button svg {
+  flex-shrink: 0;
+}
+
+.rail__label {
+  display: none;
+  font-size: var(--fs-label);
+  font-weight: var(--fw-medium);
+  white-space: nowrap;
+}
+
+.rail:hover .rail__label,
+.rail:has(:focus-visible) .rail__label {
+  display: inline;
+}
+
+.rail:hover,
+.rail:has(:focus-visible) {
+  width: 200px;
+  box-shadow: var(--shadow-lift);
 }
 
 .rail__button:hover {
@@ -266,6 +293,40 @@
 }
 
 @media (max-width: 720px) {
+  .shell {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: var(--topbar-height) minmax(0, 1fr) 56px;
+  }
+
+  .rail {
+    grid-row: 3;
+    grid-column: 1;
+    grid-template-rows: 1fr;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    border-right: 0;
+    border-top: 1px solid var(--border);
+    padding: 0 var(--space-3);
+  }
+
+  .rail__nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+    padding-top: 0;
+    width: 100%;
+  }
+
+  .rail__label {
+    display: inline;
+    font-size: 11px;
+  }
+
+  .rail__brand,
+  .rail__bottom {
+    display: none;
+  }
+
   .topbar {
     grid-template-columns: minmax(0, 1fr);
     gap: 0;

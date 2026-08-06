@@ -69,13 +69,13 @@ function renderObjectCard(object, state) {
       </span>
       <span class="object-card__address">${icon("mapPin", 16)}<span>${escapeHtml(object.address || "Адрес не указан")}</span></span>
       <span class="object-card__metrics">
-        <span><strong class="tabular">${numberFormat.format(presentCount)} / ${numberFormat.format(documentsCount)}</strong><small>файлов на месте</small></span>
-        <span><strong class="tabular">${numberFormat.format(readyCount)}</strong><small>помечено готовыми</small></span>
-        <span class="${issues ? "has-issues" : ""}"><strong class="tabular">${numberFormat.format(issues)}</strong><small>разрывы структуры</small></span>
+        <span><strong class="tabular">${numberFormat.format(presentCount)} / ${numberFormat.format(documentsCount)}</strong><small>Файлы в архиве</small></span>
+        <span><strong class="tabular">${numberFormat.format(readyCount)}</strong><small>Статус «Готов»</small></span>
+        <span class="${issues ? "has-issues" : ""}"><strong class="tabular">${numberFormat.format(issues)}</strong><small>Незакрытые требования</small></span>
       </span>
       <span class="object-card__integrity">
-        <span><span>Готовность комплекта</span><strong class="tabular">${numberFormat.format(integrity)}%</strong></span>
-        <progress class="object-card__progress" aria-label="Готовность комплекта" max="100" value="${integrity}">${integrity}%</progress>
+        <span><span>Соответствие эталону</span><strong class="tabular">${numberFormat.format(integrity)}%</strong></span>
+        <progress class="object-card__progress" aria-label="Соответствие эталону" max="100" value="${integrity}">${integrity}%</progress>
       </span>
     </button>
     <footer class="object-card__footer">

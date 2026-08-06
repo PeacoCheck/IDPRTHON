@@ -24,6 +24,14 @@ export function badge({ label, tone = "neutral", iconName = "", mono = false }) 
   return `<span class="badge badge--${tone}${mono ? " mono" : ""}">${iconName ? icon(iconName, 14) : ""}<span>${escapeHtml(label)}</span></span>`;
 }
 
+export function tooltip({ text, label = "" }) {
+  const escapedText = escapeHtml(text);
+  return `<span class="tooltip-trigger" tabindex="0" role="button" aria-label="${escapedText}">
+    ${label ? `<span>${escapeHtml(label)}</span>` : icon("info", 14)}
+    <span class="tooltip-box" role="tooltip">${escapedText}</span>
+  </span>`;
+}
+
 export function spinner(label = "Загрузка") {
   return `<span class="spinner" role="status"><span class="spinner__ring" aria-hidden="true"></span><span class="sr-only">${escapeHtml(label)}</span></span>`;
 }

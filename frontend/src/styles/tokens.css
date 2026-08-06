@@ -40,6 +40,18 @@
   --status-empty: #8a8d94;
   --status-empty-soft: #efeee9;
 
+  /* Chart section color tokens */
+  --chart-section-1: #4f46e5;
+  --chart-section-2: #0891b2;
+  --chart-section-3: #0d9488;
+  --chart-section-4: #ca8a04;
+  --chart-section-5: #e11d48;
+  --chart-section-6: #2563eb;
+  --chart-section-7: #16a34a;
+  --chart-section-8: #7c3aed;
+  --chart-section-9: #db2777;
+  --chart-section-10: #475569;
+
   --focus: var(--accent);
   --shadow-sm: 0 1px 2px rgb(23 25 28 / 7%);
   --shadow-md: 0 16px 36px rgb(23 25 28 / 13%);
