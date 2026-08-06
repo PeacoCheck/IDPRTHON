@@ -1,0 +1,87 @@
+:root {
+  color-scheme: light;
+
+  /* Warm drafting paper and quiet technical surfaces. */
+  --bg: #f6f5f1;
+  --surface: #ffffff;
+  --surface-muted: #f1efe9;
+  --surface-strong: #eae7df;
+  --surface-hover: #eeece5;
+  --surface-selected: #e9edfb;
+
+  --text: #17191c;
+  --text-soft: #55585e;
+  --text-faint: #6c7078;
+  --text-disabled: #aaa9a5;
+
+  --border: #e3e0d8;
+  --border-strong: #c9c5ba;
+  --grid-line: rgb(23 25 28 / 5%);
+
+  /* Signal marking and ink stamp accents. */
+  --accent: #d1490a;
+  --accent-hover: #b8400a;
+  --accent-decorative: #e8550f;
+  --accent-soft: #fdeee3;
+  --stamp: #2547c9;
+  --stamp-soft: #e9edfb;
+
+  /* Compatibility aliases used by existing UI modules. */
+  --primary: var(--accent);
+  --primary-hover: var(--accent-hover);
+  --primary-soft: var(--accent-soft);
+
+  --status-ready: #1d7a4f;
+  --status-ready-soft: #e6f1eb;
+  --status-warning: #96540a;
+  --status-warning-soft: #f9eedf;
+  --status-error: #c03434;
+  --status-error-soft: #f8e7e5;
+  --status-empty: #8a8d94;
+  --status-empty-soft: #efeee9;
+
+  --focus: var(--accent);
+  --shadow-sm: 0 1px 2px rgb(23 25 28 / 7%);
+  --shadow-md: 0 16px 36px rgb(23 25 28 / 13%);
+  --shadow-lift: 0 8px 22px rgb(23 25 28 / 10%);
+
+  --radius-stamp: 3px;
+  --radius-sm: 6px;
+  --radius: 8px;
+  --radius-lg: 12px;
+
+  --rail-width: 56px;
+  --sidebar-width: 272px;
+  --topbar-height: 60px;
+
+  --font: "IBM Plex Sans", system-ui, sans-serif;
+  --font-heading: "PT Sans Narrow", "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+  --fs-display: 22px;
+  --fs-heading: 15px;
+  --fs-body: 14px;
+  --fs-label: 12.5px;
+  --fs-caption: 12px;
+  --fs-eyebrow: 11px;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  --duration-instant: 100ms;
+  --duration-fast: 140ms;
+  --duration-route: 200ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --transition-hover: background-color var(--duration-instant) var(--ease-standard), color var(--duration-instant) var(--ease-standard), border-color var(--duration-instant) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard), transform var(--duration-fast) var(--ease-standard);
+  --transition-menu: var(--duration-fast) var(--ease-out);
+  --transition-modal: 180ms var(--ease-out);
+  --transition-section: 160ms var(--ease-standard);
+}

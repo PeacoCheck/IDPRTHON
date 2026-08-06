@@ -1,0 +1,174 @@
+/* AutoCAD Skills View - Styled after ID Vault Objects View */
+
+.autocad-view {
+  display: grid;
+  align-content: start;
+  gap: var(--space-4);
+}
+
+.autocad-header {
+  display: flex;
+  min-width: 0;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.autocad-header h1 {
+  font-family: var(--font-heading);
+  font-size: var(--fs-display);
+  font-weight: var(--fw-bold);
+}
+
+.autocad-header p {
+  margin-top: var(--space-1);
+  color: var(--text-soft);
+  font-size: var(--fs-caption);
+}
+
+.autocad-toolbar {
+  display: grid;
+  grid-template-columns: minmax(260px, 420px) auto 1fr;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+
+.autocad-search {
+  position: relative;
+  display: block;
+  min-width: 0;
+}
+
+.autocad-search .control {
+  padding-left: 36px;
+  background: var(--surface-muted);
+}
+
+.autocad-search .search-icon {
+  position: absolute;
+  top: 50%;
+  left: var(--space-3);
+  color: var(--text-faint);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.autocad-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+/* Skill Card - exact object-card layout */
+.skill-card {
+  display: grid;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  transition: var(--transition-hover);
+  cursor: pointer;
+  user-select: none;
+}
+
+.skill-card:hover {
+  border-color: var(--border-strong);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lift);
+}
+
+.skill-card:active {
+  transform: translateY(0);
+  box-shadow: var(--shadow-sm);
+}
+
+.skill-card__content {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+}
+
+.skill-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.skill-card__mark {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border: 1px solid var(--stamp);
+  border-radius: var(--radius-stamp);
+  background: var(--stamp-soft);
+  color: var(--stamp);
+  transform: rotate(-2deg);
+}
+
+.skill-card__title {
+  font-family: var(--font-heading);
+  font-size: var(--fs-heading);
+  font-weight: var(--fw-bold);
+  color: var(--text);
+}
+
+.skill-card__desc {
+  color: var(--text-soft);
+  font-size: var(--fs-caption);
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.skill-card__footer {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  border-top: 1px solid var(--border);
+  background: var(--surface-muted);
+}
+
+.skill-card__cmd {
+  font-family: var(--font-mono);
+  font-size: var(--fs-caption);
+  color: var(--stamp);
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  transition: var(--transition-hover);
+  cursor: pointer;
+}
+
+.skill-card__cmd:hover {
+  background: var(--stamp-soft);
+}
+
+.skill-card__cmd:active {
+  transform: scale(0.95);
+}
+
+@media (max-width: 1180px) {
+  .autocad-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .autocad-toolbar {
+    grid-template-columns: 1fr;
+  }
+  .autocad-grid {
+    grid-template-columns: 1fr;
+  }
+}

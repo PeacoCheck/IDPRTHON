@@ -1,0 +1,59 @@
+body {
+  font-family: var(--font);
+  font-size: var(--fs-body);
+  font-weight: var(--fw-regular);
+  line-height: 1.45;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+h1,
+h2,
+h3,
+.page-title,
+.section-title,
+.topbar__title {
+  font-family: var(--font-heading);
+  font-weight: var(--fw-bold);
+}
+
+h1 {
+  font-size: var(--fs-display);
+  line-height: 1.2;
+  letter-spacing: 0;
+}
+
+h2,
+h3 {
+  font-size: var(--fs-heading);
+  line-height: 1.3;
+  letter-spacing: 0.005em;
+}
+
+.mono,
+[data-mono],
+.document-code,
+.technical-date,
+.technical-counter,
+.file-size {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums slashed-zero;
+}
+
+.tabular,
+time {
+  font-variant-numeric: tabular-nums;
+}
+
+.technical-label {
+  font-family: var(--font-heading);
+  font-size: var(--fs-eyebrow);
+  font-weight: var(--fw-bold);
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+}
